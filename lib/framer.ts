@@ -54,6 +54,30 @@ function norm(s: string): string {
   return s.toLowerCase().replace(/\s+/g, "");
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function htmlToSafeParagraph(input: string): string {
+  const compact = input.replace(/\s+/g, " ").trim();
+  if (!compact) return "<p></p>";
+  // Framer rejects some vendor HTML payloads; plain paragraph is the safest fallback.
+  return `<p>${escapeHtml(compact)}</p>`;
+}
+
+function safeFormattedHtml(input: string): string {
+  const v = input.trim();
+  if (!v) return "<p></p>";
+  // Prefer existing HTML for normal cases; fallback protects against malformed rich text payloads.
+  if (/<\/?[a-z][\s\S]*>/i.test(v)) return v;
+  return htmlToSafeParagraph(v);
+}
+
 function resolveUserFieldIds(fields: readonly Field[]): Map<string, string> | null {
   const byNormName = new Map<string, string>();
   for (const f of fields) {
@@ -153,16 +177,18 @@ async function resolveTarget(framer: Framer, errors: string[]): Promise<TargetCo
 
 function managedFieldData(release: CisionRelease): FieldDataInput {
   const pub = release.publishDate?.trim() || new Date().toISOString();
+  const summaryHtml = safeFormattedHtml(release.summary || "");
+  const bodyHtml = safeFormattedHtml(release.bodyHtml || "");
   const fd: FieldDataInput = {
     [MANAGED_FIELD_IDS.title]: { type: "string", value: release.title },
     [MANAGED_FIELD_IDS.summary]: {
       type: "formattedText",
-      value: release.summary || "<p></p>",
+      value: summaryHtml,
       contentType: "html",
     },
     [MANAGED_FIELD_IDS.body]: {
       type: "formattedText",
-      value: release.bodyHtml || "<p></p>",
+      value: bodyHtml,
       contentType: "html",
     },
     [MANAGED_FIELD_IDS.publishDate]: { type: "date", value: pub },
@@ -188,6 +214,8 @@ function userFieldData(
   mapping: Map<string, string>,
   release: CisionRelease,
 ): FieldDataInput {
+  const summaryHtml = safeFormattedHtml(release.summary || "");
+  const bodyHtml = safeFormattedHtml(release.bodyHtml || "");
   const fd: FieldDataInput = {};
   const put = (key: ManagedFieldKey, data: FieldDataEntryInput) => {
     const fid = mapping.get(MANAGED_FIELD_IDS[key]);
@@ -197,12 +225,12 @@ function userFieldData(
   put("title", { type: "string", value: release.title });
   put("summary", {
     type: "formattedText",
-    value: release.summary || "<p></p>",
+    value: summaryHtml,
     contentType: "html",
   });
   put("body", {
     type: "formattedText",
-    value: release.bodyHtml || "<p></p>",
+    value: bodyHtml,
     contentType: "html",
   });
   put("publishDate", {
