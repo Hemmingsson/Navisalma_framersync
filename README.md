@@ -1,69 +1,73 @@
 # navisalma-framersync
 
-API-only service for Cision → Framer (deploy on Vercel, env vars in the dashboard — **never** commit secrets).
+Next.js service that reads Cision News Feed JSON and writes items into Framer CMS. Deploy on Vercel; configure secrets in the project dashboard and keep them out of git (`.env` is ignored).
 
 ## Local setup
 
-1. Copy `.env.example` to `.env` and fill values (`.env` is gitignored).
-2. `npm install` then `npm run dev`.
+1. Copy `.env.example` to `.env` and fill in values.
+2. Run `npm install`, then `npm run dev`.
 
 ## Checks
 
-- `GET /api/health` — no auth.
-- `npm run test` — Vitest unit tests (`lib/**/*.test.ts`).
-- `GET /api/test/cision` — `Authorization: Bearer` + value of `CRON_SECRET` from your env; returns one diagnostic block per configured feed (`feeds[]`: counts, `firstEncryptedId`, optional `detailKeys`). Requires at least one `CISION_FEED_ID_*` variable (see `.env.example`).
-- `GET /api/test/framer` — same auth; read-only Framer CMS layout (`FRAMER_PROJECT_URL`, `FRAMER_API_KEY` from env).
+- `GET /api/health` — no authentication.
+- `npm run test` — Vitest (`lib/**/*.test.ts`).
+- `GET /api/test/cision` — send `Authorization: Bearer <CRON_SECRET>`. Returns diagnostics per configured feed (`feeds[]`: counts, `firstEncryptedId`, optional `detailKeys`). Needs at least one `CISION_FEED_ID_*` variable.
+- `GET /api/test/framer` — same auth; lists Framer collections using `FRAMER_PROJECT_URL` and `FRAMER_API_KEY`.
 
 ## Cision feeds
 
-Set **`feedUniqueIdentifier`** values from your News Feed JSON delivery (module IDs next to each row in your delivery table, e.g. ALL Releases EN/SV, All Press EN/SV, All Financial EN/SV). Env naming maps language/category slots to those ids (`lib/feed-id.ts`). Same logical slot may use alternate env spellings — pick one per slot (see `.env.example`).
+Use the UniqueIdentifiers from your News Feed JSON delivery (the ids shown per module: ALL Releases, Press, Financial, etc.). Map them to env vars as listed in `.env.example`; `lib/feed-id.ts` defines slot names and order.
 
-- **Overlap:** if the same `EncryptedId` appears in more than one feed, **the most specific content type wins**: deck → financial → press → other (`lib/dedupe-releases.ts`). The sync JSON reports `duplicateEncryptedIdsDropped`.
+If the same release appears in more than one feed, dedupe keeps one row per `EncryptedId` and prefers the more specific category: deck, then financial, then press, then other (`lib/dedupe-releases.ts`). The sync response includes `duplicateEncryptedIdsDropped`.
 
-### News Feed JSON URLs (delivery reference)
+### News Feed JSON URLs
 
-| Purpose | URL (from Cision delivery PDF) |
-|--------|----------------------------------|
-| JSON listed by date | `https://publish.ne.cision.com/papi/NewsFeed/[feedUniqueIdentifier]?format=json` |
-| JSON detail | `https://publish.ne.cision.com/papi/Release/[encryptedId]?format=json` |
-| JSON detail, clean HTML | `https://publish.ne.cision.com/papi/Release/[encryptedId]?format=json&isCleanHtml=true` |
+The integration follows Cision’s published endpoints:
 
-The **`encryptedId`** for detail requests matches each list row (`EncryptedId` in JSON).
+| Purpose | URL pattern |
+|--------|-------------|
+| List | `https://publish.ne.cision.com/papi/NewsFeed/[feedUniqueIdentifier]?format=json` |
+| Detail | `https://publish.ne.cision.com/papi/Release/[encryptedId]?format=json` |
+| Detail (clean HTML) | `https://publish.ne.cision.com/papi/Release/[encryptedId]?format=json&isCleanHtml=true` |
 
-Optional **list** query parameters documented by Cision include `detailLevel` (`base`, `medium`, `detail`), `pageSize` (default **50**, max **100**), `pageIndex`, `startDate`, `endDate`, `tags`, `SearchTerm` (parameter names are case-sensitive).
+List rows expose `EncryptedId`; detail requests use that value.
 
-This service calls each **list** with `format=json&detailLevel=detail&pageSize=50`, and each **detail** with `format=json&isCleanHtml=true` — nothing beyond those unless explicitly extended later.
+Optional list parameters include `detailLevel` (`base`, `medium`, `detail`), `pageSize` (default 50, max 100), `pageIndex`, `startDate`, `endDate`, `tags`, `SearchTerm` (names are case-sensitive per Cision).
 
-## Sync API (`GET /api/sync` with cron auth)
+This code requests lists with `format=json`, `detailLevel=detail`, `pageSize=50`, and details with `format=json&isCleanHtml=true`.
 
-Successful **execution** returns HTTP **200** with a JSON body that always includes whether anything failed upstream:
+## Sync API
 
-- `ok` — `true` when the job ran to completion (including partial failures).
-- `hasErrors` — `true` when Cision or Framer reported errors (inspect `errors` and per-feed `feedResults`).
-- `synced` — items written to Framer in this run.
-- `feedItems` — total rows seen across all Cision feed list calls (before dedupe).
-- `releasesPrepared` — distinct releases passed to Framer **after** dedupe by `encryptedId`.
-- `duplicateEncryptedIdsDropped` — count of duplicate ids removed when merging feeds.
-- `feedResults[]` — per-feed `releaseCount`, `preparedCount` (after dedupe), `syncedCount`, `listFallbackCount` (detail API fell back to list row), and feed-scoped `errors` (Cision + Framer lines attributed to that feed).
-- `framerErrorsUnattributed` — Framer error lines that could not be mapped to a release (e.g. global config messages).
-- `errors` — flattened list for quick debugging (includes category prefixes such as `cision_fetch_failed:`, `timeout:`, `config:`).
+Call `GET /api/sync` with `Authorization: Bearer <CRON_SECRET>` (used by Vercel cron as well).
 
-HTTP **500** is reserved for misconfiguration that prevents running the route (for example missing `CRON_SECRET` on `/api/sync`) or unexpected crashes — not for transient Cision/Framer HTTP errors (those surface as `200` + `hasErrors: true`).
+Successful runs return HTTP 200 with JSON such as:
 
-## Operations / troubleshooting
+- `ok` — run finished (there may still be per-step errors).
+- `hasErrors` — true if Cision or Framer reported problems.
+- `synced` — items written this run.
+- `feedItems` — rows returned across all feed list calls before dedupe.
+- `releasesPrepared` — distinct releases after dedupe.
+- `duplicateEncryptedIdsDropped` — duplicates removed when merging feeds.
+- `feedResults[]` — per-feed counts, errors, `listFallbackCount` when detail fetch fell back to list data.
+- `framerErrorsUnattributed` — Framer messages that could not be tied to a feed.
+- `errors` — flattened messages for logs.
 
-- **Intermittent upstream errors:** hourly cron may still get `200` with `hasErrors` if a feed or Framer briefly fails. Check Vercel logs for `cision_feed_complete` and `cision_sync_summary` lines; retries apply to retryable HTTP/network conditions.
-- **Framer `contentType`:** new managed collections get a **Content Type** field (`cision_contentType`) on first creation. If a collection already existed **without** that column, sync detects it and **omits** `contentType` on write so upserts still succeed — add the field in Framer when you want it populated (or use a user collection with a field aliased to `content type`, `type`, or `category` — see `lib/framer.ts`).
-- **Publish Date & links:** **`PublishDate`** maps to Framer when present; **`PublicUrl`**, **`CanonicalUrl`**, **`CisionWireUrl`** — first non-empty maps to Source URL when present (`lib/cision.ts`). Missing values are not synthesized; writes omit those fields when absent where Framer allows. If your CMS schema requires a date on every row, ensure detail responses include **`PublishDate`**.
-- **Financial reports & decks:** configure `CISION_FEED_ID_*` for financial and (when available) `CISION_FEED_ID_DECK_EN` / `CISION_FEED_ID_DECK_SV` in Vercel so those feeds are included; overlap with EN_ALL/SV_ALL is OK — dedupe assigns **financial** / **deck** over generic **other**.
-- **CI:** `.github/workflows/ci.yml` runs `lint`, `build`, and `test` on push/PR to `main`.
+HTTP 500 usually means configuration or a crash (e.g. missing `CRON_SECRET` where required). Transient Cision/Framer issues tend to show up as 200 with `hasErrors: true`.
+
+## Operations
+
+- When Cision or Framer fails briefly, cron can still return 200 with `hasErrors: true`. Search Vercel logs for `cision_feed_complete` and `cision_sync_summary`.
+- Framer content type: new managed collections get a Content Type field (`cision_contentType`). Collections created without that column still sync; `contentType` is omitted on write until you add the field. Aliases for user-managed collections are in `lib/framer.ts`.
+- Dates and links come from Cision `PublishDate` and, for URLs, the first non-empty of `PublicUrl`, `CanonicalUrl`, `CisionWireUrl` (`lib/cision.ts`). Empty values are not invented; fields are omitted when there is nothing to send. If Framer requires a date on every item, detail payloads must include `PublishDate`.
+- Financial and deck feeds need their `CISION_FEED_ID_*` vars set when those modules exist. Duplicates across “all” and category feeds are merged so financial and deck win over the generic “other” bucket.
+- CI: `.github/workflows/ci.yml` runs lint, build, and test on pushes and PRs to `main`.
 
 ## Vercel
 
-Connect the GitHub repo, then set the same variable names under **Settings → Environment Variables**. Do not put keys in the repo.
+Link the GitHub repo and add the same env names under Settings → Environment Variables.
 
-Build uses `npm run build` (default). If the dashboard **Root Directory** is wrong, the build will fail. Use **Node 18.18+** (see `engines` in `package.json`).
+Build command is `npm run build`. Node should match `package.json` engines (18.18+).
 
-Cron is defined in `vercel.json` (`GET /api/sync` hourly). Vercel sends `Authorization: Bearer` with your `CRON_SECRET` automatically for cron invocations.
+Cron is in `vercel.json` (hourly `GET /api/sync`). Vercel injects `Authorization: Bearer` using `CRON_SECRET`.
 
-If the build log is truncated, open the deployment → **Building** and expand the error after `vercel build`; common issues: missing env at build time (Next does not need secrets to build), or outdated lockfile — run `npm install` locally and commit `package-lock.json`.
+If a build fails, read the deployment log on that build page—often wrong root directory or an out-of-date lockfile.
