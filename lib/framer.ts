@@ -218,7 +218,6 @@ function managedFieldData(
   release: CisionRelease,
   hasContentTypeField: boolean,
 ): FieldDataInput {
-  const pub = release.publishDate?.trim() || new Date().toISOString();
   const summaryHtml = safeFormattedHtml(release.summary || "");
   const bodyHtml = safeFormattedHtml(release.bodyHtml || "");
   const fd: FieldDataInput = {
@@ -233,12 +232,15 @@ function managedFieldData(
       value: bodyHtml,
       contentType: "html",
     },
-    [MANAGED_FIELD_IDS.publishDate]: { type: "date", value: pub },
     [MANAGED_FIELD_IDS.language]: {
       type: "string",
       value: release.language || "",
     },
   };
+  const pd = release.publishDate?.trim();
+  if (pd) {
+    fd[MANAGED_FIELD_IDS.publishDate] = { type: "date", value: pd };
+  }
   const url = release.sourceUrl?.trim();
   if (url) {
     fd[MANAGED_FIELD_IDS.sourceUrl] = { type: "link", value: url };
@@ -281,10 +283,10 @@ function userFieldData(
     value: bodyHtml,
     contentType: "html",
   });
-  put("publishDate", {
-    type: "date",
-    value: release.publishDate?.trim() || new Date().toISOString(),
-  });
+  const pd = release.publishDate?.trim();
+  if (pd) {
+    put("publishDate", { type: "date", value: pd });
+  }
   if (release.language) {
     put("language", { type: "string", value: release.language });
   }

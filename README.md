@@ -16,9 +16,23 @@ API-only service for Cision → Framer (deploy on Vercel, env vars in the dashbo
 
 ## Cision feeds
 
-Set any combination of feed ids (non-empty values only). Fixed order: optional `CISION_FEED_ID_EN_ALL` / `CISION_FEED_ID_SV_ALL`, then press (`CISION_FEED_ID_EN_PRESS` or `CISION_FEED_ID_PRESS_EN`), financial (`CISION_FEED_ID_EN_FINANCIAL` or `CISION_FEED_ID_FINANCIAL_EN`), optional decks. Same logical feed may appear under two env names — pick one spelling per slot (see `.env.example`).
+Set **`feedUniqueIdentifier`** values from your News Feed JSON delivery (module IDs next to each row in your delivery table, e.g. ALL Releases EN/SV, All Press EN/SV, All Financial EN/SV). Env naming maps language/category slots to those ids (`lib/feed-id.ts`). Same logical slot may use alternate env spellings — pick one per slot (see `.env.example`).
 
-- **Overlap:** if the same `EncryptedId` appears in more than one feed (e.g. combined “all” plus press), **the most specific content type wins**: deck → financial → press → other (`lib/dedupe-releases.ts`). The sync JSON reports `duplicateEncryptedIdsDropped`.
+- **Overlap:** if the same `EncryptedId` appears in more than one feed, **the most specific content type wins**: deck → financial → press → other (`lib/dedupe-releases.ts`). The sync JSON reports `duplicateEncryptedIdsDropped`.
+
+### News Feed JSON URLs (delivery reference)
+
+| Purpose | URL (from Cision delivery PDF) |
+|--------|----------------------------------|
+| JSON listed by date | `https://publish.ne.cision.com/papi/NewsFeed/[feedUniqueIdentifier]?format=json` |
+| JSON detail | `https://publish.ne.cision.com/papi/Release/[encryptedId]?format=json` |
+| JSON detail, clean HTML | `https://publish.ne.cision.com/papi/Release/[encryptedId]?format=json&isCleanHtml=true` |
+
+The **`encryptedId`** for detail requests matches each list row (`EncryptedId` in JSON).
+
+Optional **list** query parameters documented by Cision include `detailLevel` (`base`, `medium`, `detail`), `pageSize` (default **50**, max **100**), `pageIndex`, `startDate`, `endDate`, `tags`, `SearchTerm` (parameter names are case-sensitive).
+
+This service calls each **list** with `format=json&detailLevel=detail&pageSize=50`, and each **detail** with `format=json&isCleanHtml=true` — nothing beyond those unless explicitly extended later.
 
 ## Sync API (`GET /api/sync` with cron auth)
 
@@ -40,7 +54,7 @@ HTTP **500** is reserved for misconfiguration that prevents running the route (f
 
 - **Intermittent upstream errors:** hourly cron may still get `200` with `hasErrors` if a feed or Framer briefly fails. Check Vercel logs for `cision_feed_complete` and `cision_sync_summary` lines; retries apply to retryable HTTP/network conditions.
 - **Framer `contentType`:** new managed collections get a **Content Type** field (`cision_contentType`) on first creation. If a collection already existed **without** that column, sync detects it and **omits** `contentType` on write so upserts still succeed — add the field in Framer when you want it populated (or use a user collection with a field aliased to `content type`, `type`, or `category` — see `lib/framer.ts`).
-- **Publish Date & article links:** Cision maps to Framer **Publish Date** (`PublishDate`) and **Source URL** (`PublicUrl`, then `CanonicalUrl`, then `CisionWireUrl`). When no URL exists in the payload, the link field is omitted instead of inserting a placeholder.
+- **Publish Date & links:** **`PublishDate`** maps to Framer when present; **`PublicUrl`**, **`CanonicalUrl`**, **`CisionWireUrl`** — first non-empty maps to Source URL when present (`lib/cision.ts`). Missing values are not synthesized; writes omit those fields when absent where Framer allows. If your CMS schema requires a date on every row, ensure detail responses include **`PublishDate`**.
 - **Financial reports & decks:** configure `CISION_FEED_ID_*` for financial and (when available) `CISION_FEED_ID_DECK_EN` / `CISION_FEED_ID_DECK_SV` in Vercel so those feeds are included; overlap with EN_ALL/SV_ALL is OK — dedupe assigns **financial** / **deck** over generic **other**.
 - **CI:** `.github/workflows/ci.yml` runs `lint`, `build`, and `test` on push/PR to `main`.
 

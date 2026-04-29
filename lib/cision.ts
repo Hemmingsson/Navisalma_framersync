@@ -1,6 +1,16 @@
 import type { ContentType } from "./feed-id";
 
-const CISION_BASE = "https://publish.ne.cision.com/papi";
+/**
+ * Cision News Feed JSON — Delivery document (publish.ne.cision.com):
+ * - List: `GET .../papi/NewsFeed/{feedUniqueIdentifier}?format=json` (+ optional params)
+ * - Detail (clean HTML): `GET .../papi/Release/{encryptedId}?format=json&isCleanHtml=true`
+ * Release JSON: mapped keys come from list/detail responses; absent keys are not invented at runtime.
+ */
+const CISION_PAPI_BASE = "https://publish.ne.cision.com/papi";
+
+/** Documented optional list params include detailLevel (base | medium | detail), pageSize (default 50, max 100), pageIndex, … */
+const NEWS_FEED_QUERY =
+  "format=json&detailLevel=detail&pageSize=50" as const;
 
 export type CisionReleaseRaw = {
   EncryptedId?: string;
@@ -14,9 +24,6 @@ export type CisionReleaseRaw = {
   PublicUrl?: string;
   CanonicalUrl?: string;
   CisionWireUrl?: string;
-  /** Alternate shapes seen on some release payloads */
-  Url?: string;
-  PressRoomUrl?: string;
   Images?: { DownloadUrl?: string }[];
 };
 
@@ -64,22 +71,18 @@ export function normalizeCisionRelease(
   const encryptedId = raw.EncryptedId?.trim();
   if (!encryptedId) return null;
   const firstImg = raw.Images?.[0];
+  const urlCandidates = [raw.PublicUrl, raw.CanonicalUrl, raw.CisionWireUrl];
+  const sourceUrl =
+    urlCandidates.find((u) => typeof u === "string" && u.trim())?.trim() ?? "";
+
   return {
     encryptedId,
-    title: (raw.Title ?? "").trim() || "(untitled)",
+    title: (raw.Title ?? "").trim(),
     summary: (raw.Intro ?? "").trim(),
     bodyHtml: (raw.HtmlBody ?? raw.Body ?? "") as string,
     publishDate: raw.PublishDate ?? "",
     language: raw.Languages?.[0]?.Code ?? raw.LanguageCode ?? "",
-    sourceUrl:
-      [
-        raw.PublicUrl,
-        raw.CanonicalUrl,
-        raw.CisionWireUrl,
-        raw.Url,
-        raw.PressRoomUrl,
-      ]
-        .find((u) => typeof u === "string" && u.trim())?.trim() ?? "",
+    sourceUrl,
     heroImageUrl: firstImg?.DownloadUrl?.trim() ?? null,
     contentType: ctx.contentType,
     sourceFeedLabel: ctx.sourceFeedLabel,
@@ -87,9 +90,9 @@ export function normalizeCisionRelease(
 }
 
 export async function fetchFeed(feedId: string): Promise<CisionFeedResponse> {
-  const url = `${CISION_BASE}/NewsFeed/${encodeURIComponent(
+  const url = `${CISION_PAPI_BASE}/NewsFeed/${encodeURIComponent(
     feedId,
-  )}?format=json&detailLevel=detail&pageSize=50`;
+  )}?${NEWS_FEED_QUERY}`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`Cision feed HTTP ${res.status}: ${await res.text()}`);
@@ -101,7 +104,7 @@ export async function fetchRelease(
   encryptedId: string,
   ctx: FeedNormalizeContext,
 ): Promise<CisionRelease | null> {
-  const url = `${CISION_BASE}/Release/${encodeURIComponent(
+  const url = `${CISION_PAPI_BASE}/Release/${encodeURIComponent(
     encryptedId,
   )}?format=json&isCleanHtml=true`;
   const res = await fetch(url, { cache: "no-store" });
