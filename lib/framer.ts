@@ -238,11 +238,11 @@ function managedFieldData(
       type: "string",
       value: release.language || "",
     },
-    [MANAGED_FIELD_IDS.sourceUrl]: {
-      type: "link",
-      value: release.sourceUrl || "https://example.com",
-    },
   };
+  const url = release.sourceUrl?.trim();
+  if (url) {
+    fd[MANAGED_FIELD_IDS.sourceUrl] = { type: "link", value: url };
+  }
   if (hasContentTypeField) {
     fd[MANAGED_FIELD_IDS.contentType] = {
       type: "string",

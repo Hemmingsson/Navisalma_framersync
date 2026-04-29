@@ -19,7 +19,7 @@ API-only service for Cision → Framer (deploy on Vercel, env vars in the dashbo
 - **Legacy:** set `CISION_FEED_ID` (or legacy `CISION_FEED_ID_EN_PRESS`). One feed is synced; items are tagged as `press` / `unknown` language in app metadata.
 - **Multi-feed:** set any combination of explicit ids (non-empty values only), in fixed order: optional combined feeds `CISION_FEED_ID_EN_ALL` / `CISION_FEED_ID_SV_ALL`, then press (`CISION_FEED_ID_EN_PRESS` or `CISION_FEED_ID_PRESS_EN`), financial (`CISION_FEED_ID_EN_FINANCIAL` or `CISION_FEED_ID_FINANCIAL_EN`), optional decks. When any explicit multi-feed key is set, `CISION_FEED_ID` is ignored.
 
-- **Multi-feed overlap:** feeds are merged in a fixed order (`lib/feed-id.ts`). If the same `EncryptedId` appears in more than one feed (e.g. combined “all” plus press), **the first feed in that order wins**; later duplicates are dropped before Framer. The sync JSON reports `duplicateEncryptedIdsDropped`.
+- **Multi-feed overlap:** feeds are merged in a fixed order (`lib/feed-id.ts`). If the same `EncryptedId` appears in more than one feed (e.g. combined “all” plus press), **the most specific content type wins**: deck → financial → press → other (`lib/dedupe-releases.ts`). That way press/financial/deck items keep the right category even when they also appear under EN_ALL/SV_ALL. The sync JSON reports `duplicateEncryptedIdsDropped`.
 
 ## Sync API (`GET /api/sync` with cron auth)
 
@@ -41,6 +41,8 @@ HTTP **500** is reserved for misconfiguration that prevents running the route (f
 
 - **Intermittent upstream errors:** hourly cron may still get `200` with `hasErrors` if a feed or Framer briefly fails. Check Vercel logs for `cision_feed_complete` and `cision_sync_summary` lines; retries apply to retryable HTTP/network conditions.
 - **Framer `contentType`:** new managed collections get a **Content Type** field (`cision_contentType`) on first creation. **Older** managed collections that already had a schema **without** that field are detected at runtime: sync **omits** `contentType` on write so upserts still succeed — add the field in Framer when you want it populated (or use a user collection with a field aliased to `content type`, `type`, or `category` — see `lib/framer.ts`).
+- **Publish Date & article links:** Cision maps to Framer **Publish Date** (`PublishDate` from the release payload) and **Source URL** (`PublicUrl`, then `CanonicalUrl`, then `CisionWireUrl`). Do **not** expect `example.com` — that was only a legacy fallback for managed collections when no URL was present; missing URLs now omit the link field instead of inserting a placeholder.
+- **Financial reports & decks:** configure `CISION_FEED_ID_*` for financial and (when available) `CISION_FEED_ID_DECK_EN` / `CISION_FEED_ID_DECK_SV` in Vercel so those feeds are included; overlap with EN_ALL/SV_ALL is OK — dedupe assigns **financial** / **deck** over generic **other**.
 - **CI:** `.github/workflows/ci.yml` runs `lint`, `build`, and `test` on push/PR to `main`.
 
 ## Vercel

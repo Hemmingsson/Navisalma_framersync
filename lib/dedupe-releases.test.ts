@@ -17,8 +17,16 @@ function rel(id: string, label: string): CisionRelease {
   };
 }
 
+function relTyped(
+  id: string,
+  label: string,
+  contentType: CisionRelease["contentType"],
+): CisionRelease {
+  return { ...rel(id, label), contentType };
+}
+
 describe("dedupeReleasesFirstWin", () => {
-  it("keeps first occurrence per encryptedId", () => {
+  it("keeps first occurrence when content types tie", () => {
     const { deduped, duplicateEncryptedIdsDropped } = dedupeReleasesFirstWin([
       rel("A", "feed-a"),
       rel("B", "feed-b"),
@@ -27,5 +35,31 @@ describe("dedupeReleasesFirstWin", () => {
     expect(deduped).toHaveLength(2);
     expect(deduped[0]?.sourceFeedLabel).toBe("feed-a");
     expect(duplicateEncryptedIdsDropped).toBe(1);
+  });
+
+  it("prefers press over other when same encryptedId appears in overlap feeds", () => {
+    const { deduped } = dedupeReleasesFirstWin([
+      relTyped("X", "all-en", "other"),
+      relTyped("X", "press-en", "press"),
+    ]);
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0]?.contentType).toBe("press");
+    expect(deduped[0]?.sourceFeedLabel).toBe("press-en");
+  });
+
+  it("prefers financial over press", () => {
+    const { deduped } = dedupeReleasesFirstWin([
+      relTyped("X", "press-en", "press"),
+      relTyped("X", "financial-en", "financial"),
+    ]);
+    expect(deduped[0]?.contentType).toBe("financial");
+  });
+
+  it("prefers deck over financial", () => {
+    const { deduped } = dedupeReleasesFirstWin([
+      relTyped("X", "financial-en", "financial"),
+      relTyped("X", "deck-en", "deck"),
+    ]);
+    expect(deduped[0]?.contentType).toBe("deck");
   });
 });

@@ -14,6 +14,9 @@ export type CisionReleaseRaw = {
   PublicUrl?: string;
   CanonicalUrl?: string;
   CisionWireUrl?: string;
+  /** Alternate shapes seen on some release payloads */
+  Url?: string;
+  PressRoomUrl?: string;
   Images?: { DownloadUrl?: string }[];
 };
 
@@ -68,7 +71,15 @@ export function normalizeCisionRelease(
     bodyHtml: (raw.HtmlBody ?? raw.Body ?? "") as string,
     publishDate: raw.PublishDate ?? "",
     language: raw.Languages?.[0]?.Code ?? raw.LanguageCode ?? "",
-    sourceUrl: raw.PublicUrl ?? raw.CanonicalUrl ?? raw.CisionWireUrl ?? "",
+    sourceUrl:
+      [
+        raw.PublicUrl,
+        raw.CanonicalUrl,
+        raw.CisionWireUrl,
+        raw.Url,
+        raw.PressRoomUrl,
+      ]
+        .find((u) => typeof u === "string" && u.trim())?.trim() ?? "",
     heroImageUrl: firstImg?.DownloadUrl?.trim() ?? null,
     contentType: ctx.contentType,
     sourceFeedLabel: ctx.sourceFeedLabel,

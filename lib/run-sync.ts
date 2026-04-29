@@ -28,7 +28,7 @@ export type FeedSyncResult = {
   contentType: ContentType;
   /** Rows returned by Cision list API for this feed. */
   releaseCount: number;
-  /** Rows kept for this feed after global dedupe (first feed wins per `encryptedId`). */
+  /** Rows kept for this feed after global dedupe (most specific content type wins per `encryptedId`; see `dedupe-releases.ts`). */
   preparedCount: number;
   syncedCount: number;
   errors: string[];
