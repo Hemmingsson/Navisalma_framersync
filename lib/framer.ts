@@ -18,7 +18,7 @@ import {
 
 export type FramerSyncResult = { synced: number; errors: string[] };
 
-const COLLECTION_NAME_DEFAULT = "Press Releases";
+const COLLECTION_NAME_DEFAULT = "Cision";
 
 const MANAGED_FIELD_IDS = {
   title: "cision_title",
