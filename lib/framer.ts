@@ -42,7 +42,11 @@ function collectionName(): string {
 
 async function ensureManagedSchema(collection: ManagedCollection): Promise<void> {
   const existing = await collection.getFields();
-  if (existing.length > 0) return;
+  const existingIds = new Set(existing.map((f) => f.id));
+  const hasAllRequired = MANAGED_SCHEMA_FIELDS.every((f) =>
+    existingIds.has(f.id),
+  );
+  if (hasAllRequired) return;
   await collection.setFields([...MANAGED_SCHEMA_FIELDS]);
 }
 
