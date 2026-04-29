@@ -1,3 +1,5 @@
+import type { ContentType } from "./feed-id";
+
 const CISION_BASE = "https://publish.ne.cision.com/papi";
 
 export type CisionReleaseRaw = {
@@ -22,6 +24,12 @@ export type CisionFeedResponse = {
   Releases?: CisionReleaseRaw[];
 };
 
+/** Feed metadata attached during normalization (from configured feed, not Cision payload). */
+export type FeedNormalizeContext = {
+  contentType: ContentType;
+  sourceFeedLabel: string;
+};
+
 export type CisionRelease = {
   encryptedId: string;
   title: string;
@@ -31,17 +39,25 @@ export type CisionRelease = {
   language: string;
   sourceUrl: string;
   heroImageUrl: string | null;
+  contentType: ContentType;
+  sourceFeedLabel: string;
 };
 
-function pickLanguage(raw: CisionReleaseRaw): string {
-  return raw.Languages?.[0]?.Code ?? raw.LanguageCode ?? "";
+/** Build normalization context from configured feed metadata (shared shape with `FeedConfig`). */
+export function feedNormalizeContext(feed: {
+  contentType: ContentType;
+  feedLabel: string;
+}): FeedNormalizeContext {
+  return {
+    contentType: feed.contentType,
+    sourceFeedLabel: feed.feedLabel,
+  };
 }
 
-function pickSourceUrl(raw: CisionReleaseRaw): string {
-  return raw.PublicUrl ?? raw.CanonicalUrl ?? raw.CisionWireUrl ?? "";
-}
-
-export function normalizeCisionRelease(raw: CisionReleaseRaw): CisionRelease | null {
+export function normalizeCisionRelease(
+  raw: CisionReleaseRaw,
+  ctx: FeedNormalizeContext,
+): CisionRelease | null {
   const encryptedId = raw.EncryptedId?.trim();
   if (!encryptedId) return null;
   const firstImg = raw.Images?.[0];
@@ -51,9 +67,11 @@ export function normalizeCisionRelease(raw: CisionReleaseRaw): CisionRelease | n
     summary: (raw.Intro ?? "").trim(),
     bodyHtml: (raw.HtmlBody ?? raw.Body ?? "") as string,
     publishDate: raw.PublishDate ?? "",
-    language: pickLanguage(raw),
-    sourceUrl: pickSourceUrl(raw),
+    language: raw.Languages?.[0]?.Code ?? raw.LanguageCode ?? "",
+    sourceUrl: raw.PublicUrl ?? raw.CanonicalUrl ?? raw.CisionWireUrl ?? "",
     heroImageUrl: firstImg?.DownloadUrl?.trim() ?? null,
+    contentType: ctx.contentType,
+    sourceFeedLabel: ctx.sourceFeedLabel,
   };
 }
 
@@ -68,7 +86,10 @@ export async function fetchFeed(feedId: string): Promise<CisionFeedResponse> {
   return (await res.json()) as CisionFeedResponse;
 }
 
-export async function fetchRelease(encryptedId: string): Promise<CisionRelease | null> {
+export async function fetchRelease(
+  encryptedId: string,
+  ctx: FeedNormalizeContext,
+): Promise<CisionRelease | null> {
   const url = `${CISION_BASE}/Release/${encodeURIComponent(
     encryptedId,
   )}?format=json&isCleanHtml=true`;
@@ -81,5 +102,5 @@ export async function fetchRelease(encryptedId: string): Promise<CisionRelease |
   };
   const raw = data.Release;
   if (!raw) return null;
-  return normalizeCisionRelease(raw);
+  return normalizeCisionRelease(raw, ctx);
 }

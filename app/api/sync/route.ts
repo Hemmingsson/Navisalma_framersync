@@ -22,10 +22,14 @@ export async function GET(request: NextRequest) {
     const result = await runSync();
     return NextResponse.json({
       ok: true,
+      hasErrors: result.hasErrors,
       synced: result.synced,
       feedItems: result.feedItems,
       releasesPrepared: result.releasesPrepared,
+      duplicateEncryptedIdsDropped: result.duplicateEncryptedIdsDropped,
+      feedResults: result.feedResults,
       errors: result.errors,
+      framerErrorsUnattributed: result.framerErrorsUnattributed,
     });
   } catch (e) {
     return NextResponse.json(

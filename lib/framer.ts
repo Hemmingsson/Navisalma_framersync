@@ -8,6 +8,13 @@ import {
   type ManagedCollection,
 } from "framer-api";
 import type { CisionRelease } from "./cision";
+import {
+  categorizeSyncError,
+  errorMessage,
+  isRetryableFetchOrNetworkError,
+  withRetry,
+  withTimeout,
+} from "./retry-utils";
 
 export type FramerSyncResult = { synced: number; errors: string[] };
 
@@ -21,6 +28,7 @@ const MANAGED_FIELD_IDS = {
   language: "cision_language",
   sourceUrl: "cision_sourceUrl",
   heroImage: "cision_heroImage",
+  contentType: "cision_contentType",
 } as const;
 
 type ManagedFieldKey = keyof typeof MANAGED_FIELD_IDS;
@@ -33,6 +41,7 @@ const USER_FIELD_ALIASES: Record<ManagedFieldKey, string[]> = {
   language: ["language", "lang"],
   sourceUrl: ["sourceurl", "source", "publicurl", "canonicalurl", "link", "url"],
   heroImage: ["heroimage", "hero", "image", "cover"],
+  contentType: ["contenttype", "type", "category"],
 };
 
 const REQUIRED_USER_KEYS: ManagedFieldKey[] = [
@@ -43,8 +52,18 @@ const REQUIRED_USER_KEYS: ManagedFieldKey[] = [
 ];
 
 type TargetCollection =
-  | { kind: "managed"; collection: ManagedCollection }
-  | { kind: "user"; collection: Collection; slugToItemId: Map<string, string> };
+  | {
+      kind: "managed";
+      collection: ManagedCollection;
+      /** False when collection existed before `cision_contentType` existed — omit field on write. */
+      hasContentTypeField: boolean;
+    }
+  | {
+      kind: "user";
+      collection: Collection;
+      slugToItemId: Map<string, string>;
+      fieldMapping: Map<string, string>;
+    };
 
 function collectionName(): string {
   return process.env.FRAMER_COLLECTION_NAME?.trim() || COLLECTION_NAME_DEFAULT;
@@ -100,7 +119,7 @@ function resolveUserFieldIds(fields: readonly Field[]): Map<string, string> | nu
     stableToFramer.set(stableId, found);
   }
 
-  for (const key of ["language", "sourceUrl", "heroImage"] as const) {
+  for (const key of ["language", "sourceUrl", "heroImage", "contentType"] as const) {
     const stableId = MANAGED_FIELD_IDS[key];
     for (const alias of USER_FIELD_ALIASES[key]) {
       const id = byNormName.get(norm(alias));
@@ -120,22 +139,29 @@ function identityManagedMapping(): Map<string, string> {
   );
 }
 
+const MANAGED_SCHEMA_FIELDS = [
+  { id: MANAGED_FIELD_IDS.title, name: "Title", type: "string" as const },
+  {
+    id: MANAGED_FIELD_IDS.summary,
+    name: "Summary",
+    type: "formattedText" as const,
+  },
+  { id: MANAGED_FIELD_IDS.body, name: "Body", type: "formattedText" as const },
+  { id: MANAGED_FIELD_IDS.publishDate, name: "Publish Date", type: "date" as const },
+  { id: MANAGED_FIELD_IDS.language, name: "Language", type: "string" as const },
+  { id: MANAGED_FIELD_IDS.sourceUrl, name: "Source URL", type: "link" as const },
+  { id: MANAGED_FIELD_IDS.heroImage, name: "Hero Image", type: "image" as const },
+  {
+    id: MANAGED_FIELD_IDS.contentType,
+    name: "Content Type",
+    type: "string" as const,
+  },
+];
+
 async function ensureManagedSchema(collection: ManagedCollection): Promise<void> {
   const existing = await collection.getFields();
   if (existing.length > 0) return;
-  await collection.setFields([
-    { id: MANAGED_FIELD_IDS.title, name: "Title", type: "string" },
-    {
-      id: MANAGED_FIELD_IDS.summary,
-      name: "Summary",
-      type: "formattedText",
-    },
-    { id: MANAGED_FIELD_IDS.body, name: "Body", type: "formattedText" },
-    { id: MANAGED_FIELD_IDS.publishDate, name: "Publish Date", type: "date" },
-    { id: MANAGED_FIELD_IDS.language, name: "Language", type: "string" },
-    { id: MANAGED_FIELD_IDS.sourceUrl, name: "Source URL", type: "link" },
-    { id: MANAGED_FIELD_IDS.heroImage, name: "Hero Image", type: "image" },
-  ]);
+  await collection.setFields([...MANAGED_SCHEMA_FIELDS]);
 }
 
 async function resolveTarget(framer: Framer, errors: string[]): Promise<TargetCollection | null> {
@@ -156,7 +182,12 @@ async function resolveTarget(framer: Framer, errors: string[]): Promise<TargetCo
     for (const it of items) {
       slugToItemId.set(it.slug, it.id);
     }
-    return { kind: "user", collection: userMatch, slugToItemId };
+    return {
+      kind: "user",
+      collection: userMatch,
+      slugToItemId,
+      fieldMapping: mapping,
+    };
   }
 
   const managed = await framer.getManagedCollections();
@@ -166,16 +197,27 @@ async function resolveTarget(framer: Framer, errors: string[]): Promise<TargetCo
       managedMatch = await framer.createManagedCollection(name);
     } catch (e) {
       errors.push(
-        `Could not create/find managed collection "${name}": ${e instanceof Error ? e.message : String(e)}`,
+        `Could not create/find managed collection "${name}": ${errorMessage(e)}`,
       );
       return null;
     }
   }
   await ensureManagedSchema(managedMatch);
-  return { kind: "managed", collection: managedMatch };
+  const managedFields = await managedMatch.getFields();
+  const hasContentTypeField = managedFields.some(
+    (f) => f.id === MANAGED_FIELD_IDS.contentType,
+  );
+  return {
+    kind: "managed",
+    collection: managedMatch,
+    hasContentTypeField,
+  };
 }
 
-function managedFieldData(release: CisionRelease): FieldDataInput {
+function managedFieldData(
+  release: CisionRelease,
+  hasContentTypeField: boolean,
+): FieldDataInput {
   const pub = release.publishDate?.trim() || new Date().toISOString();
   const summaryHtml = safeFormattedHtml(release.summary || "");
   const bodyHtml = safeFormattedHtml(release.bodyHtml || "");
@@ -201,6 +243,12 @@ function managedFieldData(release: CisionRelease): FieldDataInput {
       value: release.sourceUrl || "https://example.com",
     },
   };
+  if (hasContentTypeField) {
+    fd[MANAGED_FIELD_IDS.contentType] = {
+      type: "string",
+      value: release.contentType,
+    };
+  }
   if (release.heroImageUrl) {
     fd[MANAGED_FIELD_IDS.heroImage] = {
       type: "image",
@@ -246,19 +294,20 @@ function userFieldData(
   if (release.heroImageUrl) {
     put("heroImage", { type: "image", value: release.heroImageUrl });
   }
+  put("contentType", { type: "string", value: release.contentType });
   return fd;
 }
 
-async function getMappingForTarget(target: TargetCollection): Promise<Map<string, string>> {
+function mappingForTarget(target: TargetCollection): Map<string, string> {
   if (target.kind === "managed") {
     return identityManagedMapping();
   }
-  const resolved = resolveUserFieldIds(await target.collection.getFields());
-  if (!resolved) throw new Error("Field mapping missing");
-  return resolved;
+  return target.fieldMapping;
 }
 
-async function upsertRelease(
+const FRAMER_UPSERT_TIMEOUT_MS = 45_000;
+
+async function upsertReleaseOnce(
   target: TargetCollection,
   release: CisionRelease,
   mapping: Map<string, string>,
@@ -266,7 +315,7 @@ async function upsertRelease(
   const slug = release.encryptedId;
   const fieldData =
     target.kind === "managed"
-      ? managedFieldData(release)
+      ? managedFieldData(release, target.hasContentTypeField)
       : userFieldData(mapping, release);
 
   if (target.kind === "managed") {
@@ -302,12 +351,36 @@ async function upsertRelease(
   }
 }
 
+async function upsertRelease(
+  target: TargetCollection,
+  release: CisionRelease,
+  mapping: Map<string, string>,
+): Promise<void> {
+  await withRetry(
+    () =>
+      withTimeout(
+        FRAMER_UPSERT_TIMEOUT_MS,
+        upsertReleaseOnce(target, release, mapping),
+        `Framer upsert ${release.encryptedId}`,
+      ),
+    { isRetryable: isRetryableFetchOrNetworkError },
+  );
+}
+
 export async function syncReleasesToFramer(releases: CisionRelease[]): Promise<FramerSyncResult> {
   const errors: string[] = [];
   const projectUrl = process.env.FRAMER_PROJECT_URL?.trim();
   const apiKey = process.env.FRAMER_API_KEY?.trim();
   if (!projectUrl || !apiKey) {
-    return { synced: 0, errors: ["Missing FRAMER_PROJECT_URL or FRAMER_API_KEY"] };
+    return {
+      synced: 0,
+      errors: [
+        categorizeSyncError(
+          "config",
+          "Missing FRAMER_PROJECT_URL or FRAMER_API_KEY",
+        ),
+      ],
+    };
   }
 
   const framer = await connect(projectUrl, apiKey);
@@ -316,16 +389,14 @@ export async function syncReleasesToFramer(releases: CisionRelease[]): Promise<F
     const target = await resolveTarget(framer, errors);
     if (!target) return { synced: 0, errors };
 
-    const mapping = await getMappingForTarget(target);
+    const mapping = mappingForTarget(target);
 
     for (const release of releases) {
       try {
         await upsertRelease(target, release, mapping);
         synced++;
       } catch (e) {
-        errors.push(
-          `${release.encryptedId}: ${e instanceof Error ? e.message : String(e)}`,
-        );
+        errors.push(`${release.encryptedId}: ${errorMessage(e)}`);
       }
     }
   } finally {
