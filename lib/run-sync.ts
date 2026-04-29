@@ -1,18 +1,18 @@
 import {
-  fetchFeed,
-  fetchRelease,
-  normalizeCisionRelease,
-  type CisionRelease,
-  type CisionReleaseRaw,
-  type FeedNormalizeContext,
-  feedNormalizeContext,
+  encryptedIdFromRaw,
+  fetchAllFeedReleases,
+  fetchReleaseRaw,
 } from "./cision";
-import { dedupeReleasesFirstWin } from "./dedupe-releases";
-import type { ContentType } from "./feed-id";
+import { rawReleaseToFieldData } from "./cision-framer-schema";
+import {
+  type CisionSyncRelease,
+  dedupeReleasesFirstWin,
+} from "./dedupe-releases";
 import {
   MISSING_CISION_FEED_ENV_MESSAGE,
   resolveCisionFeeds,
 } from "./feed-id";
+import { syncReleasesToFramer } from "./framer";
 import {
   categorizeSyncError,
   errorMessage,
@@ -20,20 +20,20 @@ import {
   withRetry,
   withTimeout,
 } from "./retry-utils";
+import {
+  computeGlobalFramerFailure,
+  countSyncedForFeed,
+} from "./sync-framer-attribution";
 import { encryptedIdFromFramerErrorLine } from "./sync-errors";
-import { syncReleasesToFramer } from "./framer";
 
 export type FeedSyncResult = {
   feedLabel: string;
-  contentType: ContentType;
-  /** Rows returned by Cision list API for this feed. */
+  /** Rows returned by Cision list API for this feed (all pages). */
   releaseCount: number;
-  /** Rows kept for this feed after global dedupe (most specific content type wins per `encryptedId`; see `dedupe-releases.ts`). */
+  /** Rows kept for this feed after global dedupe (first-listed feed wins per `encryptedId`). */
   preparedCount: number;
   syncedCount: number;
   errors: string[];
-  /** Detail API unavailable or empty — list row used instead (per row). */
-  listFallbackCount: number;
 };
 
 export type RunSyncResult = {
@@ -55,7 +55,7 @@ const CISION_LIST_TIMEOUT_MS = 60_000;
 const CISION_DETAIL_TIMEOUT_MS = 60_000;
 
 type DetailRow =
-  | { ok: true; release: CisionRelease; listFallback: boolean }
+  | { ok: true; release: CisionSyncRelease }
   | { ok: false; id: string; error: string };
 
 async function mapWithConcurrency<T, R>(
@@ -77,48 +77,58 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-function countSyncedForFeed(
-  releasesFromFeed: CisionRelease[],
-  failedEncryptedIds: Set<string>,
-): number {
-  let n = 0;
-  for (const r of releasesFromFeed) {
-    if (!failedEncryptedIds.has(r.encryptedId)) n++;
-  }
-  return n;
-}
-
 async function detailRowFromListRelease(
-  raw: CisionReleaseRaw,
-  ctx: FeedNormalizeContext,
+  rawListRow: Record<string, unknown>,
   feedLabel: string,
 ): Promise<DetailRow> {
-  const id = raw.EncryptedId?.trim();
-  if (!id) {
-    return { ok: false, id: "(no-id)", error: "missing EncryptedId" };
+  const listId = encryptedIdFromRaw(rawListRow);
+  if (!listId) {
+    return { ok: false, id: "(no-id)", error: "missing EncryptedId on list row" };
   }
-  try {
-    const detail = await withRetry(
-      () =>
-        withTimeout(
-          CISION_DETAIL_TIMEOUT_MS,
-          fetchRelease(id, ctx),
-          `Cision detail ${feedLabel} ${id}`,
-        ),
-      { isRetryable: isRetryableFetchOrNetworkError },
-    ).catch(() => null);
 
-    if (detail) {
-      return { ok: true, release: detail, listFallback: false };
+  try {
+    let raw: Record<string, unknown> | null;
+    try {
+      raw = await withRetry(
+        () =>
+          withTimeout(
+            CISION_DETAIL_TIMEOUT_MS,
+            fetchReleaseRaw(listId),
+            `Cision detail ${feedLabel} ${listId}`,
+          ),
+        { isRetryable: isRetryableFetchOrNetworkError },
+      );
+    } catch (e) {
+      return { ok: false, id: listId, error: errorMessage(e) };
     }
 
-    const rel = normalizeCisionRelease(raw, ctx);
-    if (!rel) return { ok: false, id, error: "normalize failed" };
-    return { ok: true, release: rel, listFallback: true };
+    if (!raw) {
+      return {
+        ok: false,
+        id: listId,
+        error: "detail JSON missing Release object",
+      };
+    }
+
+    const encryptedId = encryptedIdFromRaw(raw);
+    if (!encryptedId) {
+      return {
+        ok: false,
+        id: listId,
+        error: "missing EncryptedId on detail Release",
+      };
+    }
+
+    return {
+      ok: true,
+      release: {
+        encryptedId,
+        fieldData: rawReleaseToFieldData(raw),
+        sourceFeedLabel: feedLabel,
+      },
+    };
   } catch (e) {
-    const fallback = normalizeCisionRelease(raw, ctx);
-    if (fallback) return { ok: true, release: fallback, listFallback: true };
-    return { ok: false, id, error: errorMessage(e) };
+    return { ok: false, id: listId, error: errorMessage(e) };
   }
 }
 
@@ -149,47 +159,41 @@ export async function runSync(): Promise<RunSyncResult> {
     };
   }
 
-  const allReleases: CisionRelease[] = [];
+  const allReleases: CisionSyncRelease[] = [];
   const feedResults: FeedSyncResult[] = [];
   let feedItemsTotal = 0;
 
   for (const feed of feeds) {
-    const ctx = feedNormalizeContext(feed);
-
     const feedRow: FeedSyncResult = {
       feedLabel: feed.feedLabel,
-      contentType: feed.contentType,
       releaseCount: 0,
       preparedCount: 0,
       syncedCount: 0,
       errors: [],
-      listFallbackCount: 0,
     };
 
     try {
-      const feedResponse = await withRetry(
+      const rawItems = await withRetry(
         () =>
           withTimeout(
             CISION_LIST_TIMEOUT_MS,
-            fetchFeed(feed.feedId),
+            fetchAllFeedReleases(feed.feedId),
             `Cision list ${feed.feedLabel}`,
           ),
         { isRetryable: isRetryableFetchOrNetworkError },
       );
-      const rawItems = feedResponse.Releases ?? [];
       feedRow.releaseCount = rawItems.length;
       feedItemsTotal += rawItems.length;
 
       const detailResults = await mapWithConcurrency(
         rawItems,
         DETAIL_CONCURRENCY,
-        (raw) => detailRowFromListRelease(raw, ctx, feed.feedLabel),
+        (raw) => detailRowFromListRelease(raw, feed.feedLabel),
       );
 
-      const releasesFromFeed: CisionRelease[] = [];
+      const releasesFromFeed: CisionSyncRelease[] = [];
       for (const r of detailResults) {
         if (r.ok) {
-          if (r.listFallback) feedRow.listFallbackCount++;
           releasesFromFeed.push(r.release);
           allReleases.push(r.release);
         } else {
@@ -220,10 +224,8 @@ export async function runSync(): Promise<RunSyncResult> {
       JSON.stringify({
         event: "cision_feed_complete",
         feedLabel: feed.feedLabel,
-        contentType: feed.contentType,
         releaseCount: feedRow.releaseCount,
         preparedCount: feedRow.preparedCount,
-        listFallbackCount: feedRow.listFallbackCount,
         feedErrors: feedRow.errors.length,
       }),
     );
@@ -231,13 +233,17 @@ export async function runSync(): Promise<RunSyncResult> {
     feedResults.push(feedRow);
   }
 
-  const { deduped, duplicateEncryptedIdsDropped } =
-    dedupeReleasesFirstWin(allReleases);
+  const { deduped, duplicateEncryptedIdsDropped } = dedupeReleasesFirstWin(allReleases);
 
+  const preparedByFeed = new Map<string, number>();
+  for (const r of deduped) {
+    preparedByFeed.set(
+      r.sourceFeedLabel,
+      (preparedByFeed.get(r.sourceFeedLabel) ?? 0) + 1,
+    );
+  }
   for (const row of feedResults) {
-    row.preparedCount = deduped.filter(
-      (r) => r.sourceFeedLabel === row.feedLabel,
-    ).length;
+    row.preparedCount = preparedByFeed.get(row.feedLabel) ?? 0;
   }
 
   const releasesPrepared = deduped.length;
@@ -248,9 +254,16 @@ export async function runSync(): Promise<RunSyncResult> {
     deduped.map((r) => [r.encryptedId, r.sourceFeedLabel] as const),
   );
 
+  const feedRowByLabel = new Map(
+    feedResults.map((r) => [r.feedLabel, r] as const),
+  );
+
   const framerErrorsUnattributed: string[] = [];
+  const failedIds = new Set<string>();
   for (const line of framerSync.errors) {
     const id = encryptedIdFromFramerErrorLine(line);
+    if (id) failedIds.add(id);
+
     if (!id) {
       framerErrorsUnattributed.push(line);
       continue;
@@ -260,22 +273,17 @@ export async function runSync(): Promise<RunSyncResult> {
       framerErrorsUnattributed.push(line);
       continue;
     }
-    const row = feedResults.find((f) => f.feedLabel === label);
+    const row = feedRowByLabel.get(label);
     if (row) row.errors.push(line);
     else framerErrorsUnattributed.push(line);
   }
 
-  const failedIds = new Set<string>();
-  for (const errLine of framerSync.errors) {
-    const id = encryptedIdFromFramerErrorLine(errLine);
-    if (id) failedIds.add(id);
-  }
-
-  const globalFramerFailure =
-    releasesPrepared > 0 &&
-    framerSync.synced === 0 &&
-    framerSync.errors.length > 0 &&
-    failedIds.size === 0;
+  const globalFramerFailure = computeGlobalFramerFailure({
+    releasesPrepared,
+    framerSynced: framerSync.synced,
+    framerErrorCount: framerSync.errors.length,
+    failedIdsSize: failedIds.size,
+  });
 
   for (const feedRow of feedResults) {
     if (globalFramerFailure) {

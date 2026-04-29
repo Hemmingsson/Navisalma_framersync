@@ -1,5 +1,3 @@
-export type ContentType = "press" | "financial" | "deck" | "other";
-
 /** Shared copy for HTTP bodies when no feeds resolve (`run-sync`, `/api/test/cision`). */
 export const MISSING_CISION_FEED_ENV_MESSAGE =
   "Set at least one CISION_FEED_ID_* variable — see .env.example.";
@@ -8,7 +6,6 @@ export type FeedLanguage = "en" | "sv";
 
 export type FeedConfig = {
   feedId: string;
-  contentType: ContentType;
   language: FeedLanguage;
   feedLabel: string;
 };
@@ -16,7 +13,6 @@ export type FeedConfig = {
 type ExplicitRow = {
   /** First match wins (supports EN_PRESS vs PRESS_EN style names). */
   envKeys: string[];
-  contentType: ContentType;
   language: FeedLanguage;
   feedLabel: string;
 };
@@ -28,49 +24,41 @@ type ExplicitRow = {
 const EXPLICIT_FEED_ROWS: ExplicitRow[] = [
   {
     envKeys: ["CISION_FEED_ID_EN_ALL"],
-    contentType: "other",
     language: "en",
     feedLabel: "all-en",
   },
   {
     envKeys: ["CISION_FEED_ID_SV_ALL"],
-    contentType: "other",
     language: "sv",
     feedLabel: "all-sv",
   },
   {
     envKeys: ["CISION_FEED_ID_PRESS_EN", "CISION_FEED_ID_EN_PRESS"],
-    contentType: "press",
     language: "en",
     feedLabel: "press-en",
   },
   {
     envKeys: ["CISION_FEED_ID_PRESS_SV", "CISION_FEED_ID_SV_PRESS"],
-    contentType: "press",
     language: "sv",
     feedLabel: "press-sv",
   },
   {
     envKeys: ["CISION_FEED_ID_FINANCIAL_EN", "CISION_FEED_ID_EN_FINANCIAL"],
-    contentType: "financial",
     language: "en",
     feedLabel: "financial-en",
   },
   {
     envKeys: ["CISION_FEED_ID_FINANCIAL_SV", "CISION_FEED_ID_SV_FINANCIAL"],
-    contentType: "financial",
     language: "sv",
     feedLabel: "financial-sv",
   },
   {
     envKeys: ["CISION_FEED_ID_DECK_EN"],
-    contentType: "deck",
     language: "en",
     feedLabel: "deck-en",
   },
   {
     envKeys: ["CISION_FEED_ID_DECK_SV"],
-    contentType: "deck",
     language: "sv",
     feedLabel: "deck-sv",
   },
@@ -110,7 +98,6 @@ export function resolveCisionFeeds(): FeedConfig[] {
     if (id) {
       out.push({
         feedId: id,
-        contentType: row.contentType,
         language: row.language,
         feedLabel: row.feedLabel,
       });

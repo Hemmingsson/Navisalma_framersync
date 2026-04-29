@@ -1,11 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { isCronAuthorized } from "@/lib/auth-cron";
-import {
-  fetchFeed,
-  fetchRelease,
-  feedNormalizeContext,
-  normalizeCisionRelease,
-} from "@/lib/cision";
+import { encryptedIdFromRaw, fetchFeedPage, fetchReleaseRaw } from "@/lib/cision";
 import {
   MISSING_CISION_FEED_ENV_MESSAGE,
   resolveCisionFeeds,
@@ -41,34 +36,28 @@ export async function GET(request: NextRequest) {
 
   for (const feed of feeds) {
     try {
-      const feedResponse = await fetchFeed(feed.feedId);
+      const feedResponse = await fetchFeedPage(feed.feedId, 1);
       const raw = feedResponse.Releases?.[0];
-      const firstId = raw?.EncryptedId?.trim();
-      const ctx = feedNormalizeContext(feed);
-      let detailSample: ReturnType<typeof normalizeCisionRelease> | null = null;
+      const firstId = raw ? encryptedIdFromRaw(raw as Record<string, unknown>) : null;
+      let detailKeys: string[] | null = null;
       if (firstId) {
-        detailSample = await fetchRelease(firstId, ctx).catch(() =>
-          raw ? normalizeCisionRelease(raw, ctx) : null,
-        );
+        const detail = await fetchReleaseRaw(firstId).catch(() => null);
+        if (detail) detailKeys = Object.keys(detail).sort();
       }
 
       feedDiagnostics.push({
         feedLabel: feed.feedLabel,
-        contentType: feed.contentType,
         language: feed.language,
         feedId: feed.feedId,
         totalFound: feedResponse.TotalFoundReleases ?? null,
         pageSize: feedResponse.PageSize ?? null,
-        releaseCount: feedResponse.Releases?.length ?? 0,
+        firstPageReleaseCount: feedResponse.Releases?.length ?? 0,
         firstEncryptedId: firstId ?? null,
-        detailKeys:
-          detailSample &&
-          (Object.keys(detailSample) as (keyof typeof detailSample)[]),
+        detailKeys,
       });
     } catch (e) {
       feedDiagnostics.push({
         feedLabel: feed.feedLabel,
-        contentType: feed.contentType,
         language: feed.language,
         feedId: feed.feedId,
         error: errorMessage(e),

@@ -1,31 +1,16 @@
-import type { ContentType } from "./feed-id";
-
 /**
  * Cision News Feed JSON — Delivery document (publish.ne.cision.com):
  * - List: `GET .../papi/NewsFeed/{feedUniqueIdentifier}?format=json` (+ optional params)
- * - Detail (clean HTML): `GET .../papi/Release/{encryptedId}?format=json&isCleanHtml=true`
- * Release JSON: mapped keys come from list/detail responses; absent keys are not invented at runtime.
+ * - Detail: `GET .../papi/Release/{encryptedId}?format=json&isCleanHtml=true`
  */
 const CISION_PAPI_BASE = "https://publish.ne.cision.com/papi";
 
-/** Documented optional list params include detailLevel (base | medium | detail), pageSize (default 50, max 100), pageIndex, … */
-const NEWS_FEED_QUERY =
-  "format=json&detailLevel=detail&pageSize=50" as const;
+const LIST_PAGE_SIZE = 100 as const;
 
-export type CisionReleaseRaw = {
-  EncryptedId?: string;
-  Title?: string;
-  Intro?: string;
-  HtmlBody?: string;
-  Body?: string;
-  PublishDate?: string;
-  LanguageCode?: string;
-  Languages?: { Code?: string }[];
-  PublicUrl?: string;
-  CanonicalUrl?: string;
-  CisionWireUrl?: string;
-  Images?: { DownloadUrl?: string }[];
-};
+/** Hard cap on list pages per feed — guards runaway pagination if the API never returns a short page. */
+export const MAX_FEED_LIST_PAGES = 500;
+
+export type CisionReleaseRaw = Record<string, unknown>;
 
 export type CisionFeedResponse = {
   PageIndex?: number;
@@ -34,76 +19,68 @@ export type CisionFeedResponse = {
   Releases?: CisionReleaseRaw[];
 };
 
-/** Feed metadata attached during normalization (from configured feed, not Cision payload). */
-export type FeedNormalizeContext = {
-  contentType: ContentType;
-  sourceFeedLabel: string;
-};
-
-export type CisionRelease = {
-  encryptedId: string;
-  title: string;
-  summary: string;
-  bodyHtml: string;
-  publishDate: string;
-  language: string;
-  sourceUrl: string;
-  heroImageUrl: string | null;
-  contentType: ContentType;
-  sourceFeedLabel: string;
-};
-
-/** Build normalization context from configured feed metadata (shared shape with `FeedConfig`). */
-export function feedNormalizeContext(feed: {
-  contentType: ContentType;
-  feedLabel: string;
-}): FeedNormalizeContext {
-  return {
-    contentType: feed.contentType,
-    sourceFeedLabel: feed.feedLabel,
-  };
+function newsFeedUrl(feedId: string, pageIndex: number): string {
+  const q = new URLSearchParams({
+    format: "json",
+    detailLevel: "detail",
+    pageSize: String(LIST_PAGE_SIZE),
+    pageIndex: String(pageIndex),
+  });
+  return `${CISION_PAPI_BASE}/NewsFeed/${encodeURIComponent(feedId)}?${q}`;
 }
 
-export function normalizeCisionRelease(
-  raw: CisionReleaseRaw,
-  ctx: FeedNormalizeContext,
-): CisionRelease | null {
-  const encryptedId = raw.EncryptedId?.trim();
-  if (!encryptedId) return null;
-  const firstImg = raw.Images?.[0];
-  const urlCandidates = [raw.PublicUrl, raw.CanonicalUrl, raw.CisionWireUrl];
-  const sourceUrl =
-    urlCandidates.find((u) => typeof u === "string" && u.trim())?.trim() ?? "";
-
-  return {
-    encryptedId,
-    title: (raw.Title ?? "").trim(),
-    summary: (raw.Intro ?? "").trim(),
-    bodyHtml: (raw.HtmlBody ?? raw.Body ?? "") as string,
-    publishDate: raw.PublishDate ?? "",
-    language: raw.Languages?.[0]?.Code ?? raw.LanguageCode ?? "",
-    sourceUrl,
-    heroImageUrl: firstImg?.DownloadUrl?.trim() ?? null,
-    contentType: ctx.contentType,
-    sourceFeedLabel: ctx.sourceFeedLabel,
-  };
-}
-
-export async function fetchFeed(feedId: string): Promise<CisionFeedResponse> {
-  const url = `${CISION_PAPI_BASE}/NewsFeed/${encodeURIComponent(
-    feedId,
-  )}?${NEWS_FEED_QUERY}`;
+/** One page of list results (for tests / rare direct use). */
+export async function fetchFeedPage(
+  feedId: string,
+  pageIndex: number,
+): Promise<CisionFeedResponse> {
+  const url = newsFeedUrl(feedId, pageIndex);
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     throw new Error(`Cision feed HTTP ${res.status}: ${await res.text()}`);
   }
-  return (await res.json()) as CisionFeedResponse;
+  const body: unknown = await res.json();
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error("Cision feed JSON: expected object root");
+  }
+  const page = body as CisionFeedResponse;
+  if (page.Releases !== undefined && !Array.isArray(page.Releases)) {
+    throw new Error("Cision feed JSON: Releases must be an array when present");
+  }
+  return page;
 }
 
-export async function fetchRelease(
+/** All releases from the feed (paginated until a short page or empty). */
+export async function fetchAllFeedReleases(
+  feedId: string,
+): Promise<CisionReleaseRaw[]> {
+  const all: CisionReleaseRaw[] = [];
+  let pageIndex = 1;
+  let totalFound: number | undefined;
+  // Stops on short page, TotalFoundReleases alignment, or MAX_FEED_LIST_PAGES (hard cap).
+  for (;;) {
+    const page = await fetchFeedPage(feedId, pageIndex);
+    if (typeof page.TotalFoundReleases === "number") {
+      totalFound = page.TotalFoundReleases;
+    }
+    const batch = page.Releases ?? [];
+    all.push(...batch);
+    if (typeof totalFound === "number" && all.length >= totalFound) break;
+    if (batch.length === 0 || batch.length < LIST_PAGE_SIZE) break;
+    pageIndex += 1;
+    if (pageIndex > MAX_FEED_LIST_PAGES) {
+      throw new Error(
+        `Cision feed pagination: exceeded MAX_FEED_LIST_PAGES (${MAX_FEED_LIST_PAGES}) for feed ${feedId}`,
+      );
+    }
+  }
+  return all;
+}
+
+/** Inner release JSON from the detail endpoint, or null if missing. */
+export async function fetchReleaseRaw(
   encryptedId: string,
-  ctx: FeedNormalizeContext,
-): Promise<CisionRelease | null> {
+): Promise<Record<string, unknown> | null> {
   const url = `${CISION_PAPI_BASE}/Release/${encodeURIComponent(
     encryptedId,
   )}?format=json&isCleanHtml=true`;
@@ -111,10 +88,26 @@ export async function fetchRelease(
   if (!res.ok) {
     throw new Error(`Cision release HTTP ${res.status}: ${await res.text()}`);
   }
-  const data = (await res.json()) as {
-    Release?: CisionReleaseRaw;
-  };
-  const raw = data.Release;
-  if (!raw) return null;
-  return normalizeCisionRelease(raw, ctx);
+  const data: unknown = await res.json();
+  if (data === null || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Cision release JSON: expected object root");
+  }
+  const rec = data as Record<string, unknown>;
+  const rel = rec.Release;
+  if (rel === undefined || rel === null) return null;
+  if (typeof rel !== "object" || Array.isArray(rel)) {
+    throw new Error(
+      "Cision release JSON: Release must be a plain object when present",
+    );
+  }
+  return rel as Record<string, unknown>;
+}
+
+export function encryptedIdFromRaw(
+  raw: Record<string, unknown>,
+): string | null {
+  const id = raw.EncryptedId;
+  if (typeof id !== "string") return null;
+  const t = id.trim();
+  return t || null;
 }

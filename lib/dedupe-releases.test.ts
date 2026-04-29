@@ -1,32 +1,17 @@
 import { describe, expect, it } from "vitest";
-import type { CisionRelease } from "./cision";
+import type { CisionSyncRelease } from "./dedupe-releases";
 import { dedupeReleasesFirstWin } from "./dedupe-releases";
 
-function rel(id: string, label: string): CisionRelease {
+function rel(id: string, label: string): CisionSyncRelease {
   return {
     encryptedId: id,
-    title: "t",
-    summary: "",
-    bodyHtml: "",
-    publishDate: "",
-    language: "",
-    sourceUrl: "",
-    heroImageUrl: null,
-    contentType: "press",
+    fieldData: { Title: { type: "string", value: "t" } },
     sourceFeedLabel: label,
   };
 }
 
-function relTyped(
-  id: string,
-  label: string,
-  contentType: CisionRelease["contentType"],
-): CisionRelease {
-  return { ...rel(id, label), contentType };
-}
-
 describe("dedupeReleasesFirstWin", () => {
-  it("keeps first occurrence when content types tie", () => {
+  it("keeps first occurrence when duplicate encryptedId", () => {
     const { deduped, duplicateEncryptedIdsDropped } = dedupeReleasesFirstWin([
       rel("A", "feed-a"),
       rel("B", "feed-b"),
@@ -37,29 +22,12 @@ describe("dedupeReleasesFirstWin", () => {
     expect(duplicateEncryptedIdsDropped).toBe(1);
   });
 
-  it("prefers press over other when same encryptedId appears in overlap feeds", () => {
+  it("ignores later feed for same encryptedId", () => {
     const { deduped } = dedupeReleasesFirstWin([
-      relTyped("X", "all-en", "other"),
-      relTyped("X", "press-en", "press"),
+      rel("X", "all-en"),
+      rel("X", "press-en"),
     ]);
     expect(deduped).toHaveLength(1);
-    expect(deduped[0]?.contentType).toBe("press");
-    expect(deduped[0]?.sourceFeedLabel).toBe("press-en");
-  });
-
-  it("prefers financial over press", () => {
-    const { deduped } = dedupeReleasesFirstWin([
-      relTyped("X", "press-en", "press"),
-      relTyped("X", "financial-en", "financial"),
-    ]);
-    expect(deduped[0]?.contentType).toBe("financial");
-  });
-
-  it("prefers deck over financial", () => {
-    const { deduped } = dedupeReleasesFirstWin([
-      relTyped("X", "financial-en", "financial"),
-      relTyped("X", "deck-en", "deck"),
-    ]);
-    expect(deduped[0]?.contentType).toBe("deck");
+    expect(deduped[0]?.sourceFeedLabel).toBe("all-en");
   });
 });
