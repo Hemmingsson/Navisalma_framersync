@@ -4,7 +4,10 @@ import {
   type ManagedCollection,
   type ManagedCollectionFieldInput,
 } from "framer-api";
-import { CISION_RELEASE_FIELD_KEYS } from "./cision-framer-schema";
+import {
+  CISION_RELEASE_FIELD_KEYS,
+  COVER_IMAGE_FIELD_ID,
+} from "./cision-framer-schema";
 import type { CisionSyncRelease } from "./dedupe-releases";
 import {
   categorizeSyncError,
@@ -18,14 +21,20 @@ export type FramerSyncResult = { synced: number; errors: string[] };
 
 const COLLECTION_NAME_DEFAULT = "cision_feed";
 
-const MANAGED_SCHEMA_FIELDS: ManagedCollectionFieldInput[] =
-  CISION_RELEASE_FIELD_KEYS.map(
+const MANAGED_SCHEMA_FIELDS: ManagedCollectionFieldInput[] = [
+  {
+    id: COVER_IMAGE_FIELD_ID,
+    name: COVER_IMAGE_FIELD_ID,
+    type: "image",
+  },
+  ...CISION_RELEASE_FIELD_KEYS.map(
     (id): ManagedCollectionFieldInput => ({
       id,
       name: id,
       type: "string",
     }),
-  );
+  ),
+];
 
 function collectionName(): string {
   return process.env.FRAMER_COLLECTION_NAME?.trim() || COLLECTION_NAME_DEFAULT;
