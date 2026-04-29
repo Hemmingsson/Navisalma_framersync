@@ -1,4 +1,5 @@
 import type { FieldDataInput } from "framer-api";
+import { canonicalCisionEncryptedId } from "./cision";
 
 /**
  * Primary teaser/cover image for Framer CMS bindings (first item in Cision `Images[]`).
@@ -130,7 +131,11 @@ export function rawReleaseToFieldData(raw: Record<string, unknown>): FieldDataIn
   }
 
   for (const key of CISION_RELEASE_FIELD_KEYS) {
-    const str = stringValueForFramer(raw[key]);
+    let source: unknown = raw[key];
+    if (key === "EncryptedId" && typeof source === "string") {
+      source = canonicalCisionEncryptedId(source);
+    }
+    const str = stringValueForFramer(source);
     if (str === null) continue;
     if (CISION_FORMATTED_HTML_FIELD_KEYS.has(key)) {
       fd[key] = {

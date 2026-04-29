@@ -103,11 +103,24 @@ export async function fetchReleaseRaw(
   return rel as Record<string, unknown>;
 }
 
+/**
+ * Canonical form for Cision release IDs. Hex-only identifiers are uppercased so
+ * list vs detail versus overlapping feeds agree — Framer item `id` is case-sensitive
+ * on write but the CMS may reconcile cases, yielding fewer rows than our `synced` count.
+ */
+export function canonicalCisionEncryptedId(value: string): string {
+  const t = value.trim();
+  if (!t) return t;
+  if (/^[0-9a-fA-F]+$/.test(t)) return t.toUpperCase();
+  return t;
+}
+
 export function encryptedIdFromRaw(
   raw: Record<string, unknown>,
 ): string | null {
   const id = raw.EncryptedId;
   if (typeof id !== "string") return null;
   const t = id.trim();
-  return t || null;
+  if (!t) return null;
+  return canonicalCisionEncryptedId(t);
 }

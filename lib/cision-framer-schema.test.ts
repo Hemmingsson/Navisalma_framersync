@@ -68,10 +68,23 @@ describe("rawReleaseToFieldData", () => {
   });
 
   it("omits keys not present on raw object", () => {
-    const fd = rawReleaseToFieldData({ EncryptedId: "abc" });
-    expect(fd.EncryptedId).toEqual({ type: "string", value: "abc" });
+    const fd = rawReleaseToFieldData({ EncryptedId: "release-test-1" });
+    expect(fd.EncryptedId).toEqual({
+      type: "string",
+      value: "release-test-1",
+    });
     expect(fd.Title).toBeUndefined();
     expect(fd[COVER_IMAGE_FIELD_ID]).toBeUndefined();
+  });
+
+  it("canonicalizes EncryptedId field value (hex uppercase)", () => {
+    const fd = rawReleaseToFieldData({
+      EncryptedId: "aabbccddeeff00112233445566778899",
+    });
+    expect(fd.EncryptedId).toEqual({
+      type: "string",
+      value: "AABBCCDDEEFF00112233445566778899",
+    });
   });
 });
 
