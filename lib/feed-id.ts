@@ -2,9 +2,9 @@ export type ContentType = "press" | "financial" | "deck" | "other";
 
 /** Shared copy for HTTP bodies when no feeds resolve (`run-sync`, `/api/test/cision`). */
 export const MISSING_CISION_FEED_ENV_MESSAGE =
-  "Set CISION_FEED_ID (legacy) or explicit CISION_FEED_ID_* variables — see .env.example.";
+  "Set at least one CISION_FEED_ID_* variable — see .env.example.";
 
-export type FeedLanguage = "en" | "sv" | "unknown";
+export type FeedLanguage = "en" | "sv";
 
 export type FeedConfig = {
   feedId: string;
@@ -76,6 +76,11 @@ const EXPLICIT_FEED_ROWS: ExplicitRow[] = [
   },
 ];
 
+/** Env keys used for feeds — clear in tests so `resolveCisionFeeds()` is isolated from `.env`. */
+export const CISION_FEED_ENV_KEYS: readonly string[] = Array.from(
+  new Set(EXPLICIT_FEED_ROWS.flatMap((r) => r.envKeys)),
+);
+
 function trimEnv(key: string): string {
   const v = process.env[key];
   if (typeof v !== "string") return "";
@@ -97,18 +102,13 @@ function firstNonEmptyFeedId(keys: string[]): string {
   return "";
 }
 
-/**
- * Returns configured feeds in deterministic order.
- * - If any explicit multi-feed key is non-empty, only those feeds are returned (legacy ids ignored).
- * - Else if `CISION_FEED_ID` or legacy `CISION_FEED_ID_EN_PRESS` is set: single feed (press, unknown language).
- * - Else empty (caller treats as missing feed configuration).
- */
+/** Configured feeds in deterministic order (see `EXPLICIT_FEED_ROWS`). Empty if nothing set. */
 export function resolveCisionFeeds(): FeedConfig[] {
-  const explicit: FeedConfig[] = [];
+  const out: FeedConfig[] = [];
   for (const row of EXPLICIT_FEED_ROWS) {
     const id = firstNonEmptyFeedId(row.envKeys);
     if (id) {
-      explicit.push({
+      out.push({
         feedId: id,
         contentType: row.contentType,
         language: row.language,
@@ -116,27 +116,5 @@ export function resolveCisionFeeds(): FeedConfig[] {
       });
     }
   }
-
-  if (explicit.length > 0) return explicit;
-
-  const legacy =
-    trimEnv("CISION_FEED_ID") || trimEnv("CISION_FEED_ID_EN_PRESS");
-  if (legacy) {
-    return [
-      {
-        feedId: legacy,
-        contentType: "press",
-        language: "unknown",
-        feedLabel: "legacy",
-      },
-    ];
-  }
-
-  return [];
-}
-
-/** Prefer resolveCisionFeeds(); kept for backward compatibility — returns first feed id or "". */
-export function resolveCisionFeedId(): string {
-  const feeds = resolveCisionFeeds();
-  return feeds[0]?.feedId ?? "";
+  return out;
 }

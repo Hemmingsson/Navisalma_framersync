@@ -11,15 +11,14 @@ API-only service for Cision → Framer (deploy on Vercel, env vars in the dashbo
 
 - `GET /api/health` — no auth.
 - `npm run test` — Vitest unit tests (`lib/**/*.test.ts`).
-- `GET /api/test/cision` — `Authorization: Bearer` + value of `CRON_SECRET` from your env; returns one diagnostic block per configured feed (`feeds[]`: counts, `firstEncryptedId`, optional `detailKeys`). Requires `CISION_FEED_ID` (legacy) or at least one explicit multi-feed variable (for example `CISION_FEED_ID_EN_ALL`, `CISION_FEED_ID_EN_PRESS`, `CISION_FEED_ID_FINANCIAL_EN`, or the alternate `PRESS_*` / `FINANCIAL_*` spellings — see `.env.example`).
+- `GET /api/test/cision` — `Authorization: Bearer` + value of `CRON_SECRET` from your env; returns one diagnostic block per configured feed (`feeds[]`: counts, `firstEncryptedId`, optional `detailKeys`). Requires at least one `CISION_FEED_ID_*` variable (see `.env.example`).
 - `GET /api/test/framer` — same auth; read-only Framer CMS layout (`FRAMER_PROJECT_URL`, `FRAMER_API_KEY` from env).
 
-## Cision feeds (single vs multi)
+## Cision feeds
 
-- **Legacy:** set `CISION_FEED_ID` (or legacy `CISION_FEED_ID_EN_PRESS`). One feed is synced; items are tagged as `press` / `unknown` language in app metadata.
-- **Multi-feed:** set any combination of explicit ids (non-empty values only), in fixed order: optional combined feeds `CISION_FEED_ID_EN_ALL` / `CISION_FEED_ID_SV_ALL`, then press (`CISION_FEED_ID_EN_PRESS` or `CISION_FEED_ID_PRESS_EN`), financial (`CISION_FEED_ID_EN_FINANCIAL` or `CISION_FEED_ID_FINANCIAL_EN`), optional decks. When any explicit multi-feed key is set, `CISION_FEED_ID` is ignored.
+Set any combination of feed ids (non-empty values only). Fixed order: optional `CISION_FEED_ID_EN_ALL` / `CISION_FEED_ID_SV_ALL`, then press (`CISION_FEED_ID_EN_PRESS` or `CISION_FEED_ID_PRESS_EN`), financial (`CISION_FEED_ID_EN_FINANCIAL` or `CISION_FEED_ID_FINANCIAL_EN`), optional decks. Same logical feed may appear under two env names — pick one spelling per slot (see `.env.example`).
 
-- **Multi-feed overlap:** feeds are merged in a fixed order (`lib/feed-id.ts`). If the same `EncryptedId` appears in more than one feed (e.g. combined “all” plus press), **the most specific content type wins**: deck → financial → press → other (`lib/dedupe-releases.ts`). That way press/financial/deck items keep the right category even when they also appear under EN_ALL/SV_ALL. The sync JSON reports `duplicateEncryptedIdsDropped`.
+- **Overlap:** if the same `EncryptedId` appears in more than one feed (e.g. combined “all” plus press), **the most specific content type wins**: deck → financial → press → other (`lib/dedupe-releases.ts`). The sync JSON reports `duplicateEncryptedIdsDropped`.
 
 ## Sync API (`GET /api/sync` with cron auth)
 
@@ -40,8 +39,8 @@ HTTP **500** is reserved for misconfiguration that prevents running the route (f
 ## Operations / troubleshooting
 
 - **Intermittent upstream errors:** hourly cron may still get `200` with `hasErrors` if a feed or Framer briefly fails. Check Vercel logs for `cision_feed_complete` and `cision_sync_summary` lines; retries apply to retryable HTTP/network conditions.
-- **Framer `contentType`:** new managed collections get a **Content Type** field (`cision_contentType`) on first creation. **Older** managed collections that already had a schema **without** that field are detected at runtime: sync **omits** `contentType` on write so upserts still succeed — add the field in Framer when you want it populated (or use a user collection with a field aliased to `content type`, `type`, or `category` — see `lib/framer.ts`).
-- **Publish Date & article links:** Cision maps to Framer **Publish Date** (`PublishDate` from the release payload) and **Source URL** (`PublicUrl`, then `CanonicalUrl`, then `CisionWireUrl`). Do **not** expect `example.com` — that was only a legacy fallback for managed collections when no URL was present; missing URLs now omit the link field instead of inserting a placeholder.
+- **Framer `contentType`:** new managed collections get a **Content Type** field (`cision_contentType`) on first creation. If a collection already existed **without** that column, sync detects it and **omits** `contentType` on write so upserts still succeed — add the field in Framer when you want it populated (or use a user collection with a field aliased to `content type`, `type`, or `category` — see `lib/framer.ts`).
+- **Publish Date & article links:** Cision maps to Framer **Publish Date** (`PublishDate`) and **Source URL** (`PublicUrl`, then `CanonicalUrl`, then `CisionWireUrl`). When no URL exists in the payload, the link field is omitted instead of inserting a placeholder.
 - **Financial reports & decks:** configure `CISION_FEED_ID_*` for financial and (when available) `CISION_FEED_ID_DECK_EN` / `CISION_FEED_ID_DECK_SV` in Vercel so those feeds are included; overlap with EN_ALL/SV_ALL is OK — dedupe assigns **financial** / **deck** over generic **other**.
 - **CI:** `.github/workflows/ci.yml` runs `lint`, `build`, and `test` on push/PR to `main`.
 
