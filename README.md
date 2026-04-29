@@ -15,7 +15,7 @@ Feed IDs are the JSON **UniqueIdentifier** values from your Cision delivery. See
 
 - Fetches **all** list pages (`pageSize=100`, `detailLevel=detail`).
 - Loads each item from the **detail** endpoint (`isCleanHtml=true`). No list-only fallback.
-- Writes into a **managed** Framer collection named `cision_feed` (or `FRAMER_COLLECTION_NAME`). CMS field ids match Cision `Release` keys; nested data is stored as JSON in string fields. **`CoverImage`** is an Framer **image** field filled from the first entry in Cision **`Images`** (`DownloadUrl` / `Url`).
+- Writes into a **managed** Framer collection named `cision_feed` (or `FRAMER_COLLECTION_NAME`). CMS field ids match Cision `Release` keys; nested data is stored as JSON in string fields. **`CoverImage`** is an Framer **image** field filled from the first entry in Cision **`Images`** (`DownloadUrl` / `Url`). **`Intro`**, **`Body`**, and **`Html*`** / **`HtmlCompanyInformation`** / **`HtmlContact`** / **`HtmlLegalReference`** sync as Framer **formatted text** (`contentType: html`); other keys are plain strings.
 - Do not point the same name at a **user-managed** collection—the sync will refuse. On **new** or **incomplete** managed collections, the sync applies the full schema (including **`CoverImage`**). Rename the collection or change `FRAMER_COLLECTION_NAME` if you need a clean reset.
 
 Cision URLs (reference):

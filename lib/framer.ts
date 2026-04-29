@@ -5,6 +5,7 @@ import {
   type ManagedCollectionFieldInput,
 } from "framer-api";
 import {
+  CISION_FORMATTED_HTML_FIELD_KEYS,
   CISION_RELEASE_FIELD_KEYS,
   COVER_IMAGE_FIELD_ID,
 } from "./cision-framer-schema";
@@ -28,13 +29,47 @@ const MANAGED_SCHEMA_FIELDS: ManagedCollectionFieldInput[] = [
     type: "image",
   },
   ...CISION_RELEASE_FIELD_KEYS.map(
-    (id): ManagedCollectionFieldInput => ({
-      id,
-      name: id,
-      type: "string",
-    }),
+    (id): ManagedCollectionFieldInput =>
+      CISION_FORMATTED_HTML_FIELD_KEYS.has(id)
+        ? {
+            id,
+            name: id,
+            type: "formattedText",
+            contentType: "html",
+          }
+        : {
+            id,
+            name: id,
+            type: "string",
+          },
   ),
 ];
+
+function fieldSignatureFromInput(f: ManagedCollectionFieldInput): string {
+  if (f.type === "formattedText") {
+    return `${f.id}:formattedText:${f.contentType ?? ""}`;
+  }
+  return `${f.id}:${f.type}:`;
+}
+
+function expectedSchemaSignature(): string {
+  return MANAGED_SCHEMA_FIELDS.map(fieldSignatureFromInput).sort().join("|");
+}
+
+function fieldSignatureFromExisting(
+  f: Awaited<ReturnType<ManagedCollection["getFields"]>>[number],
+): string {
+  if (f.type === "formattedText") {
+    return `${f.id}:formattedText:${f.contentType ?? ""}`;
+  }
+  return `${f.id}:${f.type}:`;
+}
+
+function existingSchemaSignature(
+  fields: Awaited<ReturnType<ManagedCollection["getFields"]>>,
+): string {
+  return fields.map(fieldSignatureFromExisting).sort().join("|");
+}
 
 function collectionName(): string {
   return process.env.FRAMER_COLLECTION_NAME?.trim() || COLLECTION_NAME_DEFAULT;
@@ -42,11 +77,7 @@ function collectionName(): string {
 
 async function ensureManagedSchema(collection: ManagedCollection): Promise<void> {
   const existing = await collection.getFields();
-  const existingIds = new Set(existing.map((f) => f.id));
-  const hasAllRequired = MANAGED_SCHEMA_FIELDS.every((f) =>
-    existingIds.has(f.id),
-  );
-  if (hasAllRequired) return;
+  if (expectedSchemaSignature() === existingSchemaSignature(existing)) return;
   await collection.setFields([...MANAGED_SCHEMA_FIELDS]);
 }
 

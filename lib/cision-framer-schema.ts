@@ -63,6 +63,23 @@ export const CISION_RELEASE_FIELD_KEYS = [
 
 export type CisionReleaseFieldKey = (typeof CISION_RELEASE_FIELD_KEYS)[number];
 
+/**
+ * Cision fields that carry HTML (or `isCleanHtml` text) and must be Framer
+ * **`formattedText`** with **`contentType: "html"`** — plain `string` fields
+ * trigger "Expected a collection node" for rich-text CMS columns.
+ */
+export const CISION_FORMATTED_HTML_FIELD_KEYS = new Set<CisionReleaseFieldKey>([
+  "Intro",
+  "Body",
+  "HtmlIntro",
+  "HtmlTitle",
+  "HtmlHeader",
+  "HtmlBody",
+  "HtmlCompanyInformation",
+  "HtmlContact",
+  "HtmlLegalReference",
+]);
+
 /** First usable image URL from Cision detail `Images` (News Feed JSON). */
 export function primaryImageUrlFromCision(
   raw: Record<string, unknown>,
@@ -93,8 +110,8 @@ function stringValueForFramer(value: unknown): string | null {
 }
 
 /**
- * Map a Cision release to Framer `fieldData`: optional **`CoverImage`** (`type: "image"`,
- * URL from first `Images[]` entry) plus string fields for known keys.
+ * Map a Cision release to Framer `fieldData`: optional **`CoverImage`**, then
+ * **`formattedText`** (HTML) or **`string`** per {@link CISION_FORMATTED_HTML_FIELD_KEYS}.
  */
 export function rawReleaseToFieldData(raw: Record<string, unknown>): FieldDataInput {
   const fd: FieldDataInput = {};
@@ -115,7 +132,15 @@ export function rawReleaseToFieldData(raw: Record<string, unknown>): FieldDataIn
   for (const key of CISION_RELEASE_FIELD_KEYS) {
     const str = stringValueForFramer(raw[key]);
     if (str === null) continue;
-    fd[key] = { type: "string", value: str };
+    if (CISION_FORMATTED_HTML_FIELD_KEYS.has(key)) {
+      fd[key] = {
+        type: "formattedText",
+        value: str,
+        contentType: "html",
+      };
+    } else {
+      fd[key] = { type: "string", value: str };
+    }
   }
 
   return fd;

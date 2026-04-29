@@ -7,6 +7,25 @@ import {
 } from "./cision-framer-schema";
 
 describe("rawReleaseToFieldData", () => {
+  it("uses formattedText+html for Html* / Intro / Body", () => {
+    const fd = rawReleaseToFieldData({
+      Title: "T",
+      Intro: "<p>i</p>",
+      HtmlBody: "<div>b</div>",
+    } as Record<string, unknown>);
+    expect(fd.Intro).toEqual({
+      type: "formattedText",
+      value: "<p>i</p>",
+      contentType: "html",
+    });
+    expect(fd.HtmlBody).toEqual({
+      type: "formattedText",
+      value: "<div>b</div>",
+      contentType: "html",
+    });
+    expect(fd.Title).toEqual({ type: "string", value: "T" });
+  });
+
   it("adds CoverImage from first Images[] entry", () => {
     const fd = rawReleaseToFieldData({
       Title: "Hello",
