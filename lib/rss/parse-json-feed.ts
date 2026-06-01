@@ -18,10 +18,13 @@ export type JsonFeedItem = {
   [key: string]: unknown;
 };
 
-export function parseJsonFeed(body: string): JsonFeedItem[] {
-  const parsed = JSON.parse(body) as unknown;
+export function parseJsonFeedFromParsed(parsed: unknown): JsonFeedItem[] {
   if (!Array.isArray(parsed)) return [];
   return parsed.filter((entry) => entry && typeof entry === "object") as JsonFeedItem[];
+}
+
+export function parseJsonFeed(body: string): JsonFeedItem[] {
+  return parseJsonFeedFromParsed(JSON.parse(body));
 }
 
 export function jsonFeedItemId(item: JsonFeedItem, index: number): string {

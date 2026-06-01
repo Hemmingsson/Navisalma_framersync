@@ -10,7 +10,7 @@ GlobeNewswire RSS → Framer CMS. Deployed on Vercel as **navisalma-framersync**
 ```bash
 npm install
 cp .env.example .env   # Framer + CRON_SECRET
-npm run dev              # http://localhost:3000/feed-demo
+npm run dev              # http://localhost:3000
 ```
 
 ## Verify before push

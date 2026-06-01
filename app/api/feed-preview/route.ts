@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { buildFeedUrl } from "@/lib/rss/build-feed-url";
 import { settingsFromSearchParams } from "@/lib/rss/feed-settings";
-import { parseJsonFeed } from "@/lib/rss/parse-json-feed";
+import { parseJsonFeedFromParsed } from "@/lib/rss/parse-json-feed";
 import { parseRssFeed } from "@/lib/rss/parse-rss-feed";
 
 export const dynamic = "force-dynamic";
@@ -35,11 +35,11 @@ export async function GET(request: Request) {
 
     if (settings.format === "json") {
       let parsed: unknown = null;
-      let jsonItems = [] as ReturnType<typeof parseJsonFeed>;
+      let jsonItems: ReturnType<typeof parseJsonFeedFromParsed> = [];
 
       try {
         parsed = JSON.parse(body);
-        jsonItems = parseJsonFeed(body);
+        jsonItems = parseJsonFeedFromParsed(parsed);
       } catch {
         parsed = null;
       }

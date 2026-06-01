@@ -20,7 +20,9 @@ Manual sync:
 curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/sync
 ```
 
-Feed explorer (dev UI): [http://localhost:3000/feed-demo](http://localhost:3000/feed-demo)
+Feed explorer (local dev only): [http://localhost:3000/feed-demo](http://localhost:3000/feed-demo) — returns 404 in production.
+
+Production public surface: `/` (status dot + last sync), `/api/health`, `/api/sync` (auth).
 
 CI: `.github/workflows/ci.yml` — lint, build, test on push/PR to `main`.
 
@@ -57,24 +59,55 @@ Copy `.env.example` → `.env` locally. Never commit `.env`.
 ## Layout
 
 ```
+app/page.tsx                       Status dot + last sync (production)
 app/api/sync/route.ts              Cron + manual sync entrypoint
-app/api/feed-preview/route.ts      Feed explorer API (JsonFeed/RSS proxy)
-app/feed-demo/                     Feed explorer UI
+app/api/feed-preview/route.ts      Feed explorer API — dev only
+app/feed-demo/                     Feed explorer UI — dev only
+middleware.ts                      Blocks feed explorer routes outside dev
 lib/config.ts                      Shared defaults
 lib/sync/run-sync.ts               Paginated fetch → Framer sync
 lib/rss/fetch-all-feed.ts          RSS pagination (max 100/page)
-lib/rss/parse-rss-feed.ts          RSS 2.0 + Dublin Core parser
+lib/rss/parse-rss-feed.ts          RSS 2.0 + Dublin Core + media parser
 lib/rss/parse-json-feed.ts         JsonFeed parser (feed explorer)
 lib/rss/build-feed-url.ts          GlobeNewswire URL builder
+lib/framer/collection.ts           Shared managed-collection lookup
 lib/framer/sync-press-releases.ts  Upsert, reconcile, auto-publish
 lib/framer/schema.ts               CMS field schema + RSS mapping
+lib/framer/last-sync.ts            Last sync metadata for status page
 ```
+
+## CMS fields (`Notified_Feed`)
+
+All RSS item data maps into Framer — no derived-only columns:
+
+| Framer field | RSS source |
+|--------------|------------|
+| Title | `title` |
+| Published | `pubDate` |
+| Modified | `dc:modified` |
+| Subject | `dc:subject` |
+| Language | `dc:language` |
+| Keywords | `dc:keyword` |
+| Ticker | stock `category` |
+| Categories | all `category` values |
+| ID | `dc:identifier` (CMS item id) |
+| GUID | `guid` |
+| Body | `description` (full HTML) |
+| URL | `link` |
+| Publisher | `dc:publisher` |
+| Contributor | `dc:contributor` |
+| References | `dc:references` |
+| Has attachments | enclosure / media |
+| Attachment types | parsed media types |
+| Attachment URLs | enclosure / media URLs |
+| Cover image | first inline image |
+| Images | all image URLs |
 
 ## Sync pipeline
 
 1. Paginate `NOTIFIED_RSS_URL` with `/max/100/start/N` until a page returns fewer than 100 items.
 2. Parse RSS → `RssItem[]` (`dc:identifier` is the stable id).
-3. Ensure managed collection exists; refresh enum fields (Subject, Language).
+3. Ensure managed collection exists; refresh field schema on each sync.
 4. **Upsert** when feed fingerprint changes (`addItems`).
 5. **Reconcile** — `removeItems()` for CMS ids absent from the full feed snapshot.
 6. **Publish** when `AUTO_PUBLISH` is on and fingerprint changed or items were removed.
