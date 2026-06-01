@@ -50,6 +50,24 @@ describe("fetch-all-feed", () => {
       expect(fetch).toHaveBeenCalledWith(feedPageUrl(base, 100), expect.any(Object));
     });
 
+    it("throws when pagination exceeds the max page cap", async () => {
+      const base =
+        "https://rss.globenewswire.com/JsonFeed/organization/abc/content/fulltext/attachments/all";
+
+      vi.mocked(fetch).mockImplementation(async (url) => {
+        const href = String(url);
+        const match = href.match(/\/start\/(\d+)$/);
+        const start = match ? Number(match[1]) : 0;
+        const page = Array.from({ length: 100 }, (_, index) => ({
+          Title: `Item ${start + index}`,
+          Identifier: start + index,
+        }));
+        return new Response(JSON.stringify(page), { status: 200 });
+      });
+
+      await expect(fetchAllFeedItems(base)).rejects.toThrow(/exceeded 200 pages/);
+    });
+
     it("throws when a page item is missing Identifier", async () => {
       vi.mocked(fetch).mockResolvedValue(
         new Response(JSON.stringify([{ Title: "No id" }]), { status: 200 }),

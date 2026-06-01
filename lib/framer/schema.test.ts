@@ -3,6 +3,7 @@ import {
   buildCollectionFields,
   feedFingerprint,
   idsToRemove,
+  JSON_FEED_FIELD_MAP,
   jsonFeedItemToFieldData,
   jsonFeedScalar,
 } from "./schema";
@@ -21,31 +22,23 @@ const sampleItem: JsonFeedItem = {
   Identifier: 12345,
   Content: "<p>Body copy</p>",
   ContentSummary: "Short summary",
+  Summary: "Alt summary line",
   NewsArchiveTags: "tag-a",
   PdfDownloadUrl: "https://example.com/report.pdf",
   WidgetAttachment: { type: "embed" },
+  ISINs: ["SE0012345678"],
+  IsFullTextRss: true,
+  Logo: ["https://example.com/logo.png"],
+  OrgLogo: { url: "https://example.com/org.png" },
+  OrgName: "Einride AB",
+  RelatedLinks: [{ url: "https://example.com/related" }],
 };
 
 describe("schema", () => {
   it("defines all JsonFeed-backed Framer fields", () => {
     const ids = buildCollectionFields().map((field) => field.id);
-    expect(ids).toEqual([
-      "title",
-      "releaseDateTime",
-      "localizedReleaseDateTime",
-      "modifiedDate",
-      "subjects",
-      "language",
-      "keywords",
-      "stockTickers",
-      "identifier",
-      "content",
-      "contentSummary",
-      "url",
-      "newsArchiveTags",
-      "pdfDownloadUrl",
-      "widgetAttachment",
-    ]);
+    expect(ids).toEqual(JSON_FEED_FIELD_MAP.map((field) => field.id));
+    expect(ids).toHaveLength(20);
   });
 
   it("maps every JsonFeed field into Framer columns", () => {
@@ -62,23 +55,31 @@ describe("schema", () => {
       value: "<p>Body copy</p>",
     });
     expect(fieldData.contentSummary).toEqual({ type: "string", value: "Short summary" });
+    expect(fieldData.summary).toEqual({ type: "string", value: "Alt summary line" });
     expect(fieldData.url).toEqual({ type: "link", value: sampleItem.Url });
     expect(fieldData.newsArchiveTags).toEqual({ type: "string", value: "tag-a" });
     expect(fieldData.pdfDownloadUrl).toEqual({
       type: "link",
       value: "https://example.com/report.pdf",
     });
-    expect(fieldData.widgetAttachment).toEqual({
-      type: "string",
-      value: JSON.stringify({ type: "embed" }),
-    });
+    expect(fieldData.isins).toEqual({ type: "string", value: "SE0012345678" });
+    expect(fieldData.isFullTextRss).toEqual({ type: "boolean", value: true });
+    expect(fieldData.logoImage).toEqual({ type: "image", value: "https://example.com/logo.png" });
+    expect(fieldData.orgLogoImage).toEqual({ type: "image", value: "https://example.com/org.png" });
+    expect(fieldData.orgName).toEqual({ type: "string", value: "Einride AB" });
+    expect(fieldData.widgetAttachment).toBeUndefined();
+    expect(fieldData.relatedLinks).toBeUndefined();
     expect(fieldData.releaseDateTime?.value).toBe(new Date("2026-05-19T06:00:00Z").toISOString());
     expect(fieldData.modifiedDate?.value).toBe(new Date("2026-05-19T07:00:00Z").toISOString());
   });
 
+  it("throws on an unparseable date", () => {
+    expect(() => jsonFeedItemToFieldData({ ...sampleItem, ReleaseDateTime: "not-a-date" })).toThrow(/Invalid date/);
+  });
+
   it("normalizes array Subjects the same as string", () => {
     const stringItem = jsonFeedItemToFieldData({ ...sampleItem, Subjects: "A, B" });
-    const arrayItem = jsonFeedItemToFieldData({ ...sampleItem, Subjects: ["A", "B"] as unknown as string });
+    const arrayItem = jsonFeedItemToFieldData({ ...sampleItem, Subjects: ["A", "B"] });
     expect(stringItem.subjects).toEqual(arrayItem.subjects);
   });
 

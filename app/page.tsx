@@ -1,17 +1,17 @@
 import { loadSyncEnv } from "@/lib/env";
-import { readSyncStatus, STATUS_DOT_COLORS } from "@/lib/framer/last-sync";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
-  let status: keyof typeof STATUS_DOT_COLORS = "error";
-  let syncLine = "Configuration error";
+export default function HomePage() {
+  let title = "ok";
+  let color = "#22c55e";
 
   try {
-    const env = loadSyncEnv();
-    ({ status, syncLine } = await readSyncStatus(env));
-  } catch {
-    // loadSyncEnv throws when required env vars are missing
+    loadSyncEnv();
+  } catch (err) {
+    color = "#ef4444";
+    title = err instanceof Error ? err.message : "Configuration error";
+    console.error(err);
   }
 
   return (
@@ -29,23 +29,14 @@ export default async function HomePage() {
     >
       <span
         aria-hidden
-        title={status}
+        title={title}
         style={{
           width: 8,
           height: 8,
           borderRadius: "50%",
-          background: STATUS_DOT_COLORS[status],
+          background: color,
         }}
       />
-      <p
-        style={{
-          margin: 0,
-          fontSize: 12,
-          color: "#888",
-        }}
-      >
-        {syncLine}
-      </p>
     </main>
   );
 }

@@ -3,14 +3,25 @@ import type { SyncEnv } from "../env";
 import type { JsonFeedItem, SyncResult } from "../rss/types";
 import { findManagedCollection } from "./collection";
 import { LAST_SYNC_KEY, type LastSyncRecord } from "./last-sync";
-import { buildCollectionFields, feedFingerprint, idsToRemove, jsonFeedItemToFieldData } from "./schema";
+import {
+  buildCollectionFields,
+  feedFingerprint,
+  idsToRemove,
+  jsonFeedItemToFieldData,
+  schemaFingerprint,
+} from "./schema";
 
 const FINGERPRINT_KEY = "lastFeedFingerprint";
+const SCHEMA_FINGERPRINT_KEY = "lastSchemaFingerprint";
 
 export async function syncPressReleasesToFramer(
   env: SyncEnv,
   items: JsonFeedItem[],
 ): Promise<Omit<SyncResult, "pages">> {
+  if (items.length === 0) {
+    throw new Error("Empty feed; refusing to reconcile (would wipe collection)");
+  }
+
   using framer = await connect(env.framerProjectUrl, env.framerApiKey);
 
   const collection = await ensureManagedCollection(framer, env.collectionName);
@@ -37,8 +48,6 @@ export async function syncPressReleasesToFramer(
     await collection.removeItems(removedIds);
   }
 
-  await collection.setPluginData(FINGERPRINT_KEY, fingerprint);
-
   const changed = contentChanged || removedIds.length > 0;
   let published = false;
   if (env.autoPublish && changed) {
@@ -46,6 +55,8 @@ export async function syncPressReleasesToFramer(
     await framer.deploy(deployment.id);
     published = true;
   }
+
+  await collection.setPluginData(FINGERPRINT_KEY, fingerprint);
 
   const result = {
     fetched: items.length,
@@ -69,13 +80,19 @@ async function ensureManagedCollection(
   name: string,
 ): Promise<ManagedCollection> {
   const found = await findManagedCollection(framer, name);
+  const current = schemaFingerprint();
 
   if (found) {
-    await found.setFields(buildCollectionFields());
+    const stored = await found.getPluginData(SCHEMA_FINGERPRINT_KEY);
+    if (stored !== current) {
+      await found.setFields(buildCollectionFields());
+      await found.setPluginData(SCHEMA_FINGERPRINT_KEY, current);
+    }
     return found;
   }
 
   const collection = await framer.createManagedCollection(name);
   await collection.setFields(buildCollectionFields());
+  await collection.setPluginData(SCHEMA_FINGERPRINT_KEY, current);
   return collection;
 }

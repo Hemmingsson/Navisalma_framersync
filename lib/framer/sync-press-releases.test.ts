@@ -55,6 +55,7 @@ describe("syncPressReleasesToFramer", () => {
     vi.clearAllMocks();
     mockCollection.getItemIds.mockResolvedValue(["id-a", "id-c"]);
     mockCollection.getPluginData.mockResolvedValue(null);
+    mockFramer.createManagedCollection.mockResolvedValue(mockCollection);
     mockCollection.setPluginData.mockResolvedValue(undefined);
     mockCollection.addItems.mockResolvedValue(undefined);
     mockCollection.removeItems.mockResolvedValue(undefined);
@@ -79,11 +80,15 @@ describe("syncPressReleasesToFramer", () => {
       expect.objectContaining({ id: "id-b", slug: "id-b" }),
     ]);
     expect(mockCollection.removeItems).toHaveBeenCalledWith(["id-c"]);
+    expect(mockCollection.setFields).toHaveBeenCalled();
   });
 
   it("skips upsert when fingerprint is unchanged", async () => {
     const { feedFingerprint } = await import("./schema");
-    mockCollection.getPluginData.mockResolvedValue(feedFingerprint(sampleItems));
+    const feedFp = feedFingerprint(sampleItems);
+    mockCollection.getPluginData.mockImplementation(async (key: string) =>
+      key === "lastFeedFingerprint" ? feedFp : null,
+    );
     mockCollection.getItemIds.mockResolvedValue(["id-a", "id-b"]);
 
     const result = await syncPressReleasesToFramer(env, sampleItems);
@@ -92,5 +97,30 @@ describe("syncPressReleasesToFramer", () => {
     expect(result.changed).toBe(false);
     expect(mockCollection.addItems).not.toHaveBeenCalled();
     expect(mockCollection.removeItems).not.toHaveBeenCalled();
+  });
+
+  it("refuses to reconcile an empty feed", async () => {
+    mockCollection.getItemIds.mockResolvedValue(["id-x"]);
+
+    await expect(syncPressReleasesToFramer(env, [])).rejects.toThrow(/Empty feed/);
+    expect(mockCollection.removeItems).not.toHaveBeenCalled();
+  });
+
+  it("skips setFields when schema fingerprint is unchanged", async () => {
+    const { feedFingerprint, schemaFingerprint } = await import("./schema");
+    const feedFp = feedFingerprint(sampleItems);
+    const schemaFp = schemaFingerprint();
+    mockCollection.getPluginData.mockImplementation(async (key: string) =>
+      key === "lastSchemaFingerprint"
+        ? schemaFp
+        : key === "lastFeedFingerprint"
+          ? feedFp
+          : null,
+    );
+    mockCollection.getItemIds.mockResolvedValue(["id-a", "id-b"]);
+
+    await syncPressReleasesToFramer(env, sampleItems);
+
+    expect(mockCollection.setFields).not.toHaveBeenCalled();
   });
 });

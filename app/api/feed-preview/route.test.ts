@@ -35,5 +35,7 @@ describe("GET /api/feed-preview", () => {
     expect(body.ok).toBe(true);
     expect(body.itemCount).toBe(1);
     expect(body.jsonItems[0]?.Title).toBe("Release");
+    expect(body.parsed).toBeUndefined();
+    expect(body.raw).toBeUndefined();
   });
 });

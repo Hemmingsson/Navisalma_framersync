@@ -1,22 +1,4 @@
-/** GlobeNewswire JsonFeed item shape (PascalCase keys from vendor API). */
-export type JsonFeedItem = {
-  Title?: string;
-  Url?: string;
-  ReleaseDateTime?: string;
-  LocalizedReleaseDateTime?: string;
-  ModifiedDate?: string;
-  Content?: string;
-  ContentSummary?: string;
-  Subjects?: string;
-  Language?: string;
-  Keywords?: string;
-  Identifier?: string | number;
-  StockTickers?: string;
-  NewsArchiveTags?: string;
-  PdfDownloadUrl?: string;
-  WidgetAttachment?: unknown;
-  [key: string]: unknown;
-};
+import type { JsonFeedItem } from "./types";
 
 export function parseJsonFeedFromParsed(parsed: unknown): JsonFeedItem[] {
   if (!Array.isArray(parsed)) {

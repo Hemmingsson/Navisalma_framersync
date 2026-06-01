@@ -47,9 +47,7 @@ export async function GET(request: Request) {
         ok: true,
         feedUrl,
         settings,
-        parsed,
         jsonItems,
-        raw: body,
         itemCount: jsonItems.length,
       });
     } catch (error) {

@@ -2,6 +2,7 @@ import { parseJsonFeed } from "./parse-json-feed";
 import type { JsonFeedItem } from "./types";
 
 export const FEED_PAGE_SIZE = 100;
+const MAX_PAGES = 200;
 
 /** Remove paging segments so we can append our own /max and /start. */
 export function stripFeedPaging(url: string): string {
@@ -42,6 +43,10 @@ export async function fetchAllFeedItems(
     const pageUrl = feedPageUrl(feedUrl, start, pageSize);
     const pageItems = await fetchFeedPage(pageUrl);
     pages += 1;
+
+    if (pages > MAX_PAGES) {
+      throw new Error(`Feed pagination exceeded ${MAX_PAGES} pages — refusing to continue`);
+    }
 
     for (const item of pageItems) {
       if (item.Identifier == null || item.Identifier === "") {
