@@ -1,9 +1,5 @@
 import { DEFAULT_ORG_TOKEN } from "../config";
 
-export { DEFAULT_ORG_TOKEN };
-
-export type FeedFormat = "rss" | "json";
-
 export type ContentType = "" | "briefplain" | "brief" | "fulltext" | "photo";
 
 export type AttachmentsMode = "" | "images" | "all" | "none";
@@ -38,7 +34,6 @@ export const TARGET_LINK_OPTIONS = [
 ] as const;
 
 export type FeedSettings = {
-  format: FeedFormat;
   organizationToken: string;
   contentType: ContentType;
   attachments: AttachmentsMode;
@@ -67,7 +62,6 @@ export type FeedSettings = {
 };
 
 export const DEFAULT_FEED_SETTINGS: FeedSettings = {
-  format: "json",
   organizationToken: DEFAULT_ORG_TOKEN,
   contentType: "fulltext",
   attachments: "all",
@@ -100,7 +94,6 @@ export function settingsFromSearchParams(params: URLSearchParams): FeedSettings 
   const str = (key: string, fallback: string) => params.get(key) ?? fallback;
 
   return {
-    format: str("format", DEFAULT_FEED_SETTINGS.format) === "json" ? "json" : "rss",
     organizationToken: str("token", DEFAULT_FEED_SETTINGS.organizationToken),
     contentType: (params.has("content") ? params.get("content") : DEFAULT_FEED_SETTINGS.contentType) as ContentType,
     attachments: (params.has("attachments") ? params.get("attachments") : DEFAULT_FEED_SETTINGS.attachments) as AttachmentsMode,
@@ -137,7 +130,6 @@ export function settingsToSearchParams(settings: FeedSettings): URLSearchParams 
     params.set(key, typeof value === "boolean" ? "1" : value);
   };
 
-  if (settings.format !== "rss") set("format", settings.format);
   if (settings.organizationToken !== DEFAULT_ORG_TOKEN) set("token", settings.organizationToken);
   set("content", settings.contentType);
   set("attachments", settings.attachments);

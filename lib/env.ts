@@ -1,13 +1,19 @@
-import { DEFAULT_COLLECTION_NAME, DEFAULT_RSS_URL } from "./config";
+import { DEFAULT_COLLECTION_NAME } from "./config";
+import { buildFeedUrl } from "./rss/build-feed-url";
+import { DEFAULT_FEED_SETTINGS } from "./rss/feed-settings";
 
 export type SyncEnv = {
   framerProjectUrl: string;
   framerApiKey: string;
   cronSecret: string;
   collectionName: string;
-  rssUrl: string;
+  feedUrl: string;
   autoPublish: boolean;
 };
+
+function normalizeFeedUrl(url: string): string {
+  return url.replace(/\/RssFeed\//gi, "/JsonFeed/");
+}
 
 export function loadSyncEnv(): SyncEnv {
   return {
@@ -15,7 +21,11 @@ export function loadSyncEnv(): SyncEnv {
     framerApiKey: required("FRAMER_API_KEY"),
     cronSecret: required("CRON_SECRET"),
     collectionName: process.env.FRAMER_COLLECTION_NAME?.trim() || DEFAULT_COLLECTION_NAME,
-    rssUrl: process.env.NOTIFIED_RSS_URL?.trim() || DEFAULT_RSS_URL,
+    feedUrl: normalizeFeedUrl(
+      process.env.NOTIFIED_FEED_URL?.trim() ||
+        process.env.NOTIFIED_RSS_URL?.trim() ||
+        buildFeedUrl(DEFAULT_FEED_SETTINGS),
+    ),
     autoPublish: process.env.AUTO_PUBLISH?.trim().toLowerCase() !== "false",
   };
 }

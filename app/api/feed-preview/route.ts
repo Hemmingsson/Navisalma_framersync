@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { buildFeedUrl } from "@/lib/rss/build-feed-url";
 import { settingsFromSearchParams } from "@/lib/rss/feed-settings";
 import { parseJsonFeedFromParsed } from "@/lib/rss/parse-json-feed";
-import { parseRssFeed } from "@/lib/rss/parse-rss-feed";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +12,7 @@ export async function GET(request: Request) {
 
   try {
     const response = await fetch(feedUrl, {
-      headers: { Accept: "application/rss+xml, application/json, application/xml, text/xml" },
+      headers: { Accept: "application/json" },
       cache: "no-store",
     });
 
@@ -25,7 +24,6 @@ export async function GET(request: Request) {
           ok: false,
           feedUrl,
           settings,
-          format: settings.format,
           error: `Feed returned ${response.status} ${response.statusText}`,
           raw: body.slice(0, 4000),
         },
@@ -33,43 +31,36 @@ export async function GET(request: Request) {
       );
     }
 
-    if (settings.format === "json") {
-      let parsed: unknown = null;
-      let jsonItems: ReturnType<typeof parseJsonFeedFromParsed> = [];
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      return NextResponse.json(
+        { ok: false, feedUrl, settings, error: "Feed parse failed: invalid JSON", raw: body.slice(0, 4000) },
+        { status: 502 },
+      );
+    }
 
-      try {
-        parsed = JSON.parse(body);
-        jsonItems = parseJsonFeedFromParsed(parsed);
-      } catch {
-        parsed = null;
-      }
-
+    try {
+      const jsonItems = parseJsonFeedFromParsed(parsed);
       return NextResponse.json({
         ok: true,
         feedUrl,
         settings,
-        format: "json",
         parsed,
         jsonItems,
         raw: body,
         itemCount: jsonItems.length,
       });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Feed parse failed";
+      return NextResponse.json(
+        { ok: false, feedUrl, settings, error: message, raw: body.slice(0, 4000) },
+        { status: 502 },
+      );
     }
-
-    const parsed = parseRssFeed(body);
-
-    return NextResponse.json({
-      ok: true,
-      feedUrl,
-      settings,
-      format: "rss",
-      channel: parsed.channel,
-      items: parsed.items,
-      itemCount: parsed.items.length,
-      raw: body,
-    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Feed fetch failed";
-    return NextResponse.json({ ok: false, feedUrl, settings, format: settings.format, error: message }, { status: 500 });
+    return NextResponse.json({ ok: false, feedUrl, settings, error: message }, { status: 500 });
   }
 }

@@ -1,20 +1,20 @@
 import { connect, type ManagedCollection } from "framer-api";
 import type { SyncEnv } from "../env";
-import type { RssItem, SyncResult } from "../rss/types";
+import type { JsonFeedItem, SyncResult } from "../rss/types";
 import { findManagedCollection } from "./collection";
 import { LAST_SYNC_KEY, type LastSyncRecord } from "./last-sync";
-import { buildCollectionFields, feedFingerprint, idsToRemove, rssItemToFieldData } from "./schema";
+import { buildCollectionFields, feedFingerprint, idsToRemove, jsonFeedItemToFieldData } from "./schema";
 
 const FINGERPRINT_KEY = "lastFeedFingerprint";
 
 export async function syncPressReleasesToFramer(
   env: SyncEnv,
-  items: RssItem[],
+  items: JsonFeedItem[],
 ): Promise<Omit<SyncResult, "pages">> {
   using framer = await connect(env.framerProjectUrl, env.framerApiKey);
 
   const collection = await ensureManagedCollection(framer, env.collectionName);
-  const feedIds = new Set(items.map((item) => item["dc:identifier"]));
+  const feedIds = new Set(items.map((item) => String(item.Identifier)));
   const cmsIds = await collection.getItemIds();
   const removedIds = idsToRemove(feedIds, cmsIds);
   const fingerprint = feedFingerprint(items);
@@ -22,11 +22,14 @@ export async function syncPressReleasesToFramer(
   const contentChanged = fingerprint !== previousFingerprint;
 
   if (contentChanged && items.length > 0) {
-    const framerItems = items.map((item) => ({
-      id: item["dc:identifier"],
-      slug: item["dc:identifier"],
-      fieldData: rssItemToFieldData(item),
-    }));
+    const framerItems = items.map((item) => {
+      const id = String(item.Identifier);
+      return {
+        id,
+        slug: id,
+        fieldData: jsonFeedItemToFieldData(item),
+      };
+    });
     await collection.addItems(framerItems);
   }
 
@@ -48,6 +51,7 @@ export async function syncPressReleasesToFramer(
     fetched: items.length,
     upserted: contentChanged ? items.length : 0,
     removed: removedIds.length,
+    changed,
     collection: env.collectionName,
     published,
   };

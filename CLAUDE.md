@@ -8,9 +8,9 @@ Read `lib/sync/run-sync.ts` and `lib/framer/sync-press-releases.ts`. Run `npm te
 
 ## Rules
 
-- RSS in `lib/rss/`, Framer in `lib/framer/`.
+- JsonFeed in `lib/rss/`, Framer in `lib/framer/`.
 - Paginate full feed before reconcile deletes.
-- Item id = `dc:identifier`.
+- Item id = `String(Identifier)`.
 - Use `loadSyncEnv()` from `lib/env.ts`.
 - No `app/api/test/` routes. No iframe work in this repo.
 
@@ -20,4 +20,4 @@ Read `lib/sync/run-sync.ts` and `lib/framer/sync-press-releases.ts`. Run `npm te
 curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/sync
 ```
 
-Expect: `{ ok: true, fetched, pages, upserted, removed, collection, published }`.
+Expect: `{ ok: true, fetched, pages, upserted, removed, changed, collection, published }`.

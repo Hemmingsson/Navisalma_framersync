@@ -12,18 +12,8 @@ import {
   settingsFromSearchParams,
   settingsToSearchParams,
 } from "@/lib/rss/feed-settings";
-import {
-  formatJsonCell,
-  jsonFeedItemId,
-  jsonFeedSummary,
-  type JsonFeedItem,
-} from "@/lib/rss/parse-json-feed";
-import {
-  RSS_CHANNEL_FIELD_ORDER,
-  RSS_ITEM_FIELD_ORDER,
-  formatRssValue,
-  type RssChannel,
-} from "@/lib/rss/parse-rss-feed";
+import { formatJsonCell, jsonFeedItemId, jsonFeedSummary } from "@/lib/rss/parse-json-feed";
+import type { JsonFeedItem } from "@/lib/rss/types";
 import styles from "./feed-demo.module.css";
 
 const JSON_CRACK_WIDGET = "https://jsoncrack.com/widget";
@@ -32,10 +22,7 @@ const JSON_CRACK_EDITOR = "https://jsoncrack.com/editor";
 type PreviewResponse = {
   ok: boolean;
   feedUrl: string;
-  format: "rss" | "json";
   itemCount?: number | null;
-  channel?: RssChannel;
-  items?: Record<string, unknown>[];
   jsonItems?: JsonFeedItem[];
   parsed?: unknown;
   raw?: string;
@@ -74,78 +61,6 @@ function CheckField({
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       {label}
     </label>
-  );
-}
-
-function RssFieldGrid({ data, order }: { data: Record<string, unknown>; order: readonly string[] }) {
-  const keys = [
-    ...order.filter((key) => data[key] !== undefined && data[key] !== ""),
-    ...Object.keys(data).filter((key) => !order.includes(key)),
-  ];
-
-  return (
-    <dl className={styles.metaGrid}>
-      {keys.map((key) => {
-        const value = data[key];
-        if (value === undefined || value === "") return null;
-        const text = formatRssValue(value);
-        const isHtml = key === "description";
-        const isUrl = key === "link" || key === "guid";
-
-        return (
-          <div key={key}>
-            <dt>{key}</dt>
-            <dd>
-              {isUrl && typeof value === "string" ? (
-                <a href={value} target="_blank" rel="noreferrer">
-                  {value}
-                </a>
-              ) : isHtml && typeof value === "string" ? (
-                <span className={styles.htmlHint}>(HTML — see preview below)</span>
-              ) : (
-                text
-              )}
-            </dd>
-          </div>
-        );
-      })}
-    </dl>
-  );
-}
-
-function ItemCard({ item, index }: { item: Record<string, unknown>; index: number }) {
-  const [open, setOpen] = useState(index === 0);
-  const title = formatRssValue(item.title) || `(item ${index + 1})`;
-  const pubDate = formatRssValue(item.pubDate);
-  const dcSubject = formatRssValue(item["dc:subject"]);
-  const category = formatRssValue(item.category);
-  const description = typeof item.description === "string" ? item.description : "";
-
-  return (
-    <article className={styles.itemCard}>
-      <button type="button" className={styles.itemHeader} onClick={() => setOpen(!open)}>
-        <div>
-          <h3 className={styles.itemTitle}>{title}</h3>
-          <div className={styles.itemMeta}>
-            {[pubDate, dcSubject, category].filter(Boolean).join(" · ")}
-          </div>
-        </div>
-        <span className={styles.itemChevron}>{open ? "▾" : "▸"}</span>
-      </button>
-
-      {open ? (
-        <div className={styles.itemBody}>
-          <RssFieldGrid data={item} order={RSS_ITEM_FIELD_ORDER} />
-
-          {description ? (
-            <>
-              <p className={styles.sectionLabel}>&lt;description&gt; rendered</p>
-              <div className={styles.bodyPreview} dangerouslySetInnerHTML={{ __html: description }} />
-            </>
-          ) : null}
-        </div>
-      ) : null}
-    </article>
   );
 }
 
@@ -188,13 +103,13 @@ const TABLE_COLUMNS: Array<{
   { key: "Title", label: "Title", className: styles.colTitle },
   { key: "ReleaseDateTime", label: "Published" },
   { key: "ModifiedDate", label: "Modified" },
-  { key: "Subjects", label: "Subject" },
+  { key: "Subjects", label: "Subjects" },
   { key: "Language", label: "Language" },
   { key: "Keywords", label: "Keywords" },
-  { key: "StockTickers", label: "Ticker" },
-  { key: "Identifier", label: "ID" },
+  { key: "StockTickers", label: "Stock Tickers" },
+  { key: "Identifier", label: "Identifier" },
   { key: "summary", label: "Summary", className: styles.colSummary },
-  { key: "Url", label: "URL", className: styles.colUrl },
+  { key: "Url", label: "Url", className: styles.colUrl },
 ];
 
 function JsonFeedTable({ items }: { items: JsonFeedItem[] }) {
@@ -269,11 +184,9 @@ export default function FeedDemo() {
   const [settings, setSettings] = useState<FeedSettings>(DEFAULT_FEED_SETTINGS);
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
-  const [rssTab, setRssTab] = useState<"items" | "raw">("items");
   const [initialized, setInitialized] = useState(false);
 
   const feedUrl = useMemo(() => buildFeedUrl(settings), [settings]);
-  const isJson = settings.format === "json";
 
   const update = useCallback(<K extends keyof FeedSettings>(key: K, value: FeedSettings[K]) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
@@ -287,12 +200,11 @@ export default function FeedDemo() {
     try {
       const response = await fetch(`/api/feed-preview?${params.toString()}`);
       const data = (await response.json()) as PreviewResponse;
-      setPreview({ ...data, format: data.format ?? nextSettings.format });
+      setPreview(data);
     } catch (error) {
       setPreview({
         ok: false,
         feedUrl: buildFeedUrl(nextSettings),
-        format: nextSettings.format,
         error: error instanceof Error ? error.message : "Request failed",
       });
     } finally {
@@ -336,16 +248,7 @@ export default function FeedDemo() {
       <div className={styles.layout}>
         <aside className={styles.sidebar}>
           <section className={styles.section}>
-            <h2>Format &amp; organization</h2>
-            <Field label="Feed format" hint="JSON (JsonFeed) is the default · RSS for XML field inspection">
-              <select
-                value={settings.format}
-                onChange={(e) => update("format", e.target.value as FeedSettings["format"])}
-              >
-                <option value="json">JSON</option>
-                <option value="rss">RSS</option>
-              </select>
-            </Field>
+            <h2>Organization</h2>
             <Field label="Organization token" hint="From Notified · Einride default pre-filled">
               <input
                 value={settings.organizationToken}
@@ -505,14 +408,14 @@ export default function FeedDemo() {
                   Status: <strong>{preview.ok ? "OK" : "Error"}</strong>
                 </span>
                 <span className={styles.chip}>
-                  Format: <strong>{preview.format?.toUpperCase() ?? "—"}</strong>
+                  Format: <strong>JSON</strong>
                 </span>
                 <span className={`${styles.chip} ${preview.itemCount ? styles.chipOk : styles.chipWarn}`}>
                   Items: <strong>{preview.itemCount ?? 0}</strong>
                 </span>
               </div>
 
-              {isJson && preview.ok && preview.feedUrl ? (
+              {preview.ok && preview.feedUrl ? (
                 <>
                   <JsonCrackEmbed feedUrl={preview.feedUrl} />
                   {preview.jsonItems && preview.jsonItems.length > 0 ? (
@@ -524,56 +427,6 @@ export default function FeedDemo() {
                       </p>
                     </div>
                   )}
-                </>
-              ) : null}
-
-              {!isJson && preview.channel && Object.keys(preview.channel).length > 0 ? (
-                <div className={styles.channelBox}>
-                  <h3>&lt;channel&gt;</h3>
-                  <RssFieldGrid data={preview.channel as Record<string, unknown>} order={RSS_CHANNEL_FIELD_ORDER} />
-                </div>
-              ) : null}
-
-              {!isJson ? (
-                <>
-                  <div className={styles.tabs}>
-                    <button
-                      type="button"
-                      className={`${styles.tab} ${rssTab === "items" ? styles.tabActive : ""}`}
-                      onClick={() => setRssTab("items")}
-                    >
-                      &lt;item&gt; elements
-                    </button>
-                    <button
-                      type="button"
-                      className={`${styles.tab} ${rssTab === "raw" ? styles.tabActive : ""}`}
-                      onClick={() => setRssTab("raw")}
-                    >
-                      Raw XML
-                    </button>
-                  </div>
-
-                  {rssTab === "items" ? (
-                    preview.items && preview.items.length > 0 ? (
-                      <div className={styles.itemList}>
-                        {preview.items.map((item, index) => (
-                          <ItemCard
-                            key={formatRssValue(item["dc:identifier"]) || formatRssValue(item.link) || index}
-                            item={item}
-                            index={index}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <div className={styles.empty}>
-                        <p>
-                          <strong>No &lt;item&gt; elements in this feed.</strong>
-                        </p>
-                      </div>
-                    )
-                  ) : null}
-
-                  {rssTab === "raw" && preview.raw ? <pre className={styles.rawBox}>{preview.raw}</pre> : null}
                 </>
               ) : null}
             </>

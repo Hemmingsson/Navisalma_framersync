@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatJsonCell, jsonFeedSummary, parseJsonFeed } from "./parse-json-feed";
+import { formatJsonCell, jsonFeedSummary, parseJsonFeed, parseJsonFeedFromParsed } from "./parse-json-feed";
 
 const SAMPLE = `[{"Title":"Test release","Url":"https://example.com/1","ReleaseDateTime":"2026-05-19T06:00:00Z","Subjects":"Company Announcement","Language":"en","Identifier":123,"ContentSummary":"Short summary."}]`;
 
@@ -19,5 +19,14 @@ describe("parseJsonFeed", () => {
   it("formats array fields for table cells", () => {
     expect(formatJsonCell(["Company Announcement"])).toBe("Company Announcement");
     expect(formatJsonCell([])).toBe("—");
+  });
+
+  it("accepts an empty array", () => {
+    expect(parseJsonFeedFromParsed([])).toEqual([]);
+  });
+
+  it("throws when parsed JSON is not an array", () => {
+    expect(() => parseJsonFeedFromParsed({ items: [] })).toThrow("expected JSON array");
+    expect(() => parseJsonFeed('{"Title":"Not an array"}')).toThrow("expected JSON array");
   });
 });

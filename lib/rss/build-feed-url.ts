@@ -1,10 +1,5 @@
+import { JSON_FEED_BASE } from "../config";
 import type { FeedSettings } from "./feed-settings";
-
-function appendSegments(segments: string[], ...parts: Array<string | false | undefined>) {
-  for (const part of parts) {
-    if (part) segments.push(part);
-  }
-}
 
 function appendList(segments: string[], prefix: string, value: string) {
   const items = value
@@ -18,11 +13,6 @@ function appendList(segments: string[], prefix: string, value: string) {
 }
 
 export function buildFeedUrl(settings: FeedSettings): string {
-  const base =
-    settings.format === "json"
-      ? "https://rss.globenewswire.com/JsonFeed/"
-      : "https://rss.globenewswire.com/RssFeed/";
-
   const segments: string[] = [];
 
   const token = settings.organizationToken.trim();
@@ -75,7 +65,7 @@ export function buildFeedUrl(settings: FeedSettings): string {
     segments.push(`timezone/${encodeURIComponent(settings.timezone.trim())}`);
   }
 
-  let url = base + segments.join("/");
+  let url = JSON_FEED_BASE + segments.join("/");
 
   if (settings.dateFormat.trim()) {
     const separator = url.includes("?") ? "&" : "?";

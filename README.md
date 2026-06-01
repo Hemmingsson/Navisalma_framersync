@@ -1,6 +1,6 @@
 # Navisalma Framer Sync
 
-GlobeNewswire RSS → Framer CMS. Deployed on Vercel as **navisalma-framersync**.
+GlobeNewswire JsonFeed → Framer CMS. Deployed on Vercel as **navisalma-framersync**.
 
 **Operator docs:** [AGENTS.md](./AGENTS.md)  
 **Architecture & Notified reference:** keeping-up repo → `docs/NOTIFIED-FEED-SYNC.md`, `docs/NOTIFIED-INTEGRATION.md`

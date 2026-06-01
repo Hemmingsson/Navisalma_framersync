@@ -1,20 +1,17 @@
 import { loadSyncEnv } from "@/lib/env";
-import { formatLastSync, readLastSync } from "@/lib/framer/last-sync";
+import { readSyncStatus, STATUS_DOT_COLORS } from "@/lib/framer/last-sync";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  let ok = false;
-  let syncLine = "No sync recorded yet";
+  let status: keyof typeof STATUS_DOT_COLORS = "error";
+  let syncLine = "Configuration error";
 
   try {
     const env = loadSyncEnv();
-    ok = true;
-    const lastSync = await readLastSync(env);
-    if (lastSync) syncLine = formatLastSync(lastSync);
+    ({ status, syncLine } = await readSyncStatus(env));
   } catch {
-    ok = false;
-    syncLine = "Configuration error";
+    // loadSyncEnv throws when required env vars are missing
   }
 
   return (
@@ -32,11 +29,12 @@ export default async function HomePage() {
     >
       <span
         aria-hidden
+        title={status}
         style={{
           width: 8,
           height: 8,
           borderRadius: "50%",
-          background: ok ? "#22c55e" : "#ef4444",
+          background: STATUS_DOT_COLORS[status],
         }}
       />
       <p

@@ -1,13 +1,46 @@
 import { NextResponse } from "next/server";
+import { connect } from "framer-api";
 import { loadSyncEnv } from "@/lib/env";
+import { feedPageUrl } from "@/lib/rss/fetch-all-feed";
+import { parseJsonFeed } from "@/lib/rss/parse-json-feed";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    loadSyncEnv();
-    return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ ok: false }, { status: 503 });
+    const env = loadSyncEnv();
+    const { searchParams } = new URL(request.url);
+
+    if (searchParams.get("deep") !== "1") {
+      return NextResponse.json({ ok: true });
+    }
+
+    using framer = await connect(env.framerProjectUrl, env.framerApiKey);
+    await framer.getProjectInfo();
+
+    const probeUrl = feedPageUrl(env.feedUrl, 0, 1);
+    const feedResponse = await fetch(probeUrl, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+
+    if (!feedResponse.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Feed fetch failed: ${feedResponse.status} ${feedResponse.statusText}`,
+          feedUrl: probeUrl,
+        },
+        { status: 503 },
+      );
+    }
+
+    const body = await feedResponse.text();
+    parseJsonFeed(body);
+
+    return NextResponse.json({ ok: true, feedUrl: probeUrl });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Health check failed";
+    return NextResponse.json({ ok: false, error: message }, { status: 503 });
   }
 }

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Operating manual for **navisalma-framersync**: GlobeNewswire RSS → Framer managed CMS.
+Operating manual for **navisalma-framersync**: GlobeNewswire JsonFeed → Framer managed CMS.
 
 Product and vendor documentation lives in the sibling **keeping-up** repo (`docs/NOTIFIED-FEED-SYNC.md`, `docs/NOTIFIED-INTEGRATION.md`, `docs/IFRAMES.md`). This repo contains the sync service and feed explorer only.
 
@@ -24,6 +24,8 @@ Feed explorer (local dev only): [http://localhost:3000/feed-demo](http://localho
 
 Production public surface: `/` (status dot + last sync), `/api/health`, `/api/sync` (auth).
 
+**Health:** `GET /api/health` is public (shallow env check). `GET /api/health?deep=1` is also public by design — it probes Framer connectivity and validates a JsonFeed page (`max/1`); it does not return API keys or secrets.
+
 CI: `.github/workflows/ci.yml` — lint, build, test on push/PR to `main`.
 
 ## Deploy (GitHub → Vercel)
@@ -35,7 +37,7 @@ CI: `.github/workflows/ci.yml` — lint, build, test on push/PR to `main`.
 | 3 | Set Production env vars (see below) |
 | 4 | Confirm Cron Jobs shows `/api/sync` running |
 | 5 | Hit `GET /api/health` — expect `{ ok: true }` |
-| 6 | Hit `GET /api/sync` with Bearer token — expect `{ ok: true, fetched, pages, upserted, removed, published }` |
+| 6 | Hit `GET /api/sync` with Bearer token — expect `{ ok: true, fetched, pages, upserted, removed, changed, published }` |
 
 **Cron:** `vercel.json` → `GET /api/sync` every minute (`* * * * *`). Requires Vercel **Pro** for sub-daily schedules.
 
@@ -49,7 +51,8 @@ CI: `.github/workflows/ci.yml` — lint, build, test on push/PR to `main`.
 | `FRAMER_API_KEY` | yes | — | Framer Server API key |
 | `CRON_SECRET` | yes | — | Protects `/api/sync` |
 | `FRAMER_COLLECTION_NAME` | no | `Notified_Feed` | Managed collection name |
-| `NOTIFIED_RSS_URL` | no | Einride org RSS URL | Single GlobeNewswire feed |
+| `NOTIFIED_FEED_URL` | no | Einride org JsonFeed URL | Primary GlobeNewswire feed |
+| `NOTIFIED_RSS_URL` | no | — | Deprecated alias; `/RssFeed/` auto-rewritten to `/JsonFeed/` |
 | `AUTO_PUBLISH` | no | `true` | Publish + deploy Framer when feed fingerprint changes |
 
 Defaults: `lib/config.ts`. Loader: `lib/env.ts` → `loadSyncEnv()`.
@@ -59,64 +62,60 @@ Copy `.env.example` → `.env` locally. Never commit `.env`.
 ## Layout
 
 ```
-app/page.tsx                       Status dot + last sync (production)
+app/page.tsx                       Three-state status dot + last sync
+app/api/health/route.ts            Env check; ?deep=1 probes Framer + feed
 app/api/sync/route.ts              Cron + manual sync entrypoint
 app/api/feed-preview/route.ts      Feed explorer API — dev only
-app/feed-demo/                     Feed explorer UI — dev only
+app/feed-demo/                     JsonFeed explorer UI — dev only
 middleware.ts                      Blocks feed explorer routes outside dev
-lib/config.ts                      Shared defaults
+lib/config.ts                      Shared defaults (JSON_FEED_BASE, org token)
 lib/sync/run-sync.ts               Paginated fetch → Framer sync
-lib/rss/fetch-all-feed.ts          RSS pagination (max 100/page)
-lib/rss/parse-rss-feed.ts          RSS 2.0 + Dublin Core + media parser
-lib/rss/parse-json-feed.ts         JsonFeed parser (feed explorer)
-lib/rss/build-feed-url.ts          GlobeNewswire URL builder
+lib/rss/fetch-all-feed.ts          JsonFeed pagination (max 100/page)
+lib/rss/parse-json-feed.ts         JsonFeed parser
+lib/rss/build-feed-url.ts          GlobeNewswire JsonFeed URL builder
 lib/framer/collection.ts           Shared managed-collection lookup
 lib/framer/sync-press-releases.ts  Upsert, reconcile, auto-publish
-lib/framer/schema.ts               CMS field schema + RSS mapping
-lib/framer/last-sync.ts            Last sync metadata for status page
+lib/framer/schema.ts               CMS field schema + JsonFeed mapping
+lib/framer/last-sync.ts            Last sync metadata + status helper
 ```
 
 ## CMS fields (`Notified_Feed`)
 
-All RSS item data maps into Framer — no derived-only columns:
+Direct 1:1 JsonFeed → Framer mapping (15 fields):
 
-| Framer field | RSS source |
-|--------------|------------|
-| Title | `title` |
-| Published | `pubDate` |
-| Modified | `dc:modified` |
-| Subject | `dc:subject` |
-| Language | `dc:language` |
-| Keywords | `dc:keyword` |
-| Ticker | stock `category` |
-| Categories | all `category` values |
-| ID | `dc:identifier` (CMS item id) |
-| GUID | `guid` |
-| Body | `description` (full HTML) |
-| URL | `link` |
-| Publisher | `dc:publisher` |
-| Contributor | `dc:contributor` |
-| References | `dc:references` |
-| Has attachments | enclosure / media |
-| Attachment types | parsed media types |
-| Attachment URLs | enclosure / media URLs |
-| Cover image | first inline image |
-| Images | all image URLs |
+| Framer field | JsonFeed key |
+|--------------|--------------|
+| Title | `Title` |
+| Release Date Time | `ReleaseDateTime` |
+| Localized Release Date Time | `LocalizedReleaseDateTime` |
+| Modified Date | `ModifiedDate` |
+| Subjects | `Subjects` |
+| Language | `Language` |
+| Keywords | `Keywords` |
+| Stock Tickers | `StockTickers` |
+| Identifier | `Identifier` (CMS item id) |
+| Content | `Content` (HTML formattedText) |
+| Content Summary | `ContentSummary` |
+| Url | `Url` |
+| News Archive Tags | `NewsArchiveTags` |
+| PDF Download Url | `PdfDownloadUrl` |
+| Widget Attachment | `WidgetAttachment` |
 
 ## Sync pipeline
 
-1. Paginate `NOTIFIED_RSS_URL` with `/max/100/start/N` until a page returns fewer than 100 items.
-2. Parse RSS → `RssItem[]` (`dc:identifier` is the stable id).
-3. Ensure managed collection exists; refresh field schema on each sync.
-4. **Upsert** when feed fingerprint changes (`addItems`).
-5. **Reconcile** — `removeItems()` for CMS ids absent from the full feed snapshot.
-6. **Publish** when `AUTO_PUBLISH` is on and fingerprint changed or items were removed.
+1. Paginate `feedUrl` with `/max/100/start/N` until a page returns fewer than 100 items.
+2. Parse JsonFeed → `JsonFeedItem[]` (`String(Identifier)` is the stable id).
+3. Fail sync if any item is missing `Identifier`.
+4. Ensure managed collection exists; refresh field schema on each sync.
+5. **Upsert** when feed fingerprint changes (`addItems`).
+6. **Reconcile** — `removeItems()` for CMS ids absent from the full feed snapshot.
+7. **Publish** when `AUTO_PUBLISH` is on and content changed or items were removed.
 
 Production URL: `https://navisalma-framersync.vercel.app/api/sync`
 
 ## Conventions
 
-- One org feed only. RSS parsing in `lib/rss/`, Framer writes in `lib/framer/`.
+- One org feed only. JsonFeed parsing in `lib/rss/`, Framer writes in `lib/framer/`.
 - Run `npm test && npm run build` before finishing.
 - Do not add test-only API routes under `app/api/test/`.
 - Iframe embeds and IR page design are out of scope (see keeping-up docs).

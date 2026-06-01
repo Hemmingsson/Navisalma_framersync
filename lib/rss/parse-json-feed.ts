@@ -19,7 +19,9 @@ export type JsonFeedItem = {
 };
 
 export function parseJsonFeedFromParsed(parsed: unknown): JsonFeedItem[] {
-  if (!Array.isArray(parsed)) return [];
+  if (!Array.isArray(parsed)) {
+    throw new Error("Feed parse failed: expected JSON array");
+  }
   return parsed.filter((entry) => entry && typeof entry === "object") as JsonFeedItem[];
 }
 
@@ -31,15 +33,19 @@ export function jsonFeedItemId(item: JsonFeedItem, index: number): string {
   return String(item.Identifier ?? item.Url ?? index);
 }
 
-export function formatJsonCell(value: unknown): string {
-  if (value === undefined || value === null || value === "") return "—";
+/** Normalize JsonFeed scalar values (string, array, or object). */
+export function formatJsonFeedValue(value: unknown, empty = ""): string {
+  if (value === undefined || value === null || value === "") return empty;
   if (Array.isArray(value)) {
-    if (value.length === 0) return "—";
-    return value.map((entry) => formatJsonCell(entry)).join(", ");
+    if (value.length === 0) return empty;
+    return value.map((entry) => formatJsonFeedValue(entry, empty)).join(", ");
   }
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  return JSON.stringify(value);
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+export function formatJsonCell(value: unknown): string {
+  return formatJsonFeedValue(value, "—");
 }
 
 export function stripHtml(html: string): string {

@@ -1,5 +1,5 @@
-import { parseRssItems } from "./parse-rss-feed";
-import type { RssItem } from "./parse-rss-feed";
+import { parseJsonFeed } from "./parse-json-feed";
+import type { JsonFeedItem } from "./types";
 
 export const FEED_PAGE_SIZE = 100;
 
@@ -16,25 +16,25 @@ export function feedPageUrl(baseUrl: string, start: number, pageSize = FEED_PAGE
   return `${root}/max/${pageSize}/start/${start}`;
 }
 
-async function fetchFeedPage(url: string): Promise<RssItem[]> {
+async function fetchFeedPage(url: string): Promise<JsonFeedItem[]> {
   const response = await fetch(url, {
-    headers: { Accept: "application/rss+xml, application/xml, text/xml" },
+    headers: { Accept: "application/json" },
     cache: "no-store",
   });
 
   if (!response.ok) {
-    throw new Error(`RSS fetch failed: ${response.status} ${response.statusText} (${url})`);
+    throw new Error(`Feed fetch failed: ${response.status} ${response.statusText} (${url})`);
   }
 
-  return parseRssItems(await response.text());
+  return parseJsonFeed(await response.text());
 }
 
 /** Fetch every page until a page returns fewer than pageSize items. */
-export async function fetchAllPressReleases(
+export async function fetchAllFeedItems(
   feedUrl: string,
   pageSize = FEED_PAGE_SIZE,
-): Promise<{ items: RssItem[]; pages: number }> {
-  const seen = new Map<string, RssItem>();
+): Promise<{ items: JsonFeedItem[]; pages: number }> {
+  const seen = new Map<string, JsonFeedItem>();
   let start = 0;
   let pages = 0;
 
@@ -44,7 +44,10 @@ export async function fetchAllPressReleases(
     pages += 1;
 
     for (const item of pageItems) {
-      seen.set(item["dc:identifier"], item);
+      if (item.Identifier == null || item.Identifier === "") {
+        throw new Error("Feed item missing Identifier");
+      }
+      seen.set(String(item.Identifier), item);
     }
 
     if (pageItems.length < pageSize) break;

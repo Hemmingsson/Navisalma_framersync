@@ -20,10 +20,9 @@ describe("buildFeedUrl", () => {
     expect(url).toContain("/start/20/max/50/count/true");
   });
 
-  it("supports JSON base and dateFormat query", () => {
+  it("supports dateFormat query", () => {
     const url = buildFeedUrl({
       ...DEFAULT_FEED_SETTINGS,
-      format: "json",
       dateFormat: "MMM+dd,+yyyy",
     });
     expect(url.startsWith("https://rss.globenewswire.com/JsonFeed/")).toBe(true);
