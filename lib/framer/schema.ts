@@ -120,6 +120,7 @@ export function jsonFeedItemToFieldData(item: JsonFeedItem) {
         fieldData[id] = { type: "image", value: extractImageUrl(raw) };
         break;
       case "date": {
+        // Missing/empty dates are dropped (no column value); unparseable dates throw.
         const parsed = parseFeedDate(typeof raw === "string" ? raw : undefined, id);
         if (parsed) fieldData[id] = { type: "date", value: parsed };
         break;

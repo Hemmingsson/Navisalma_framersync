@@ -2,6 +2,8 @@ import { loadSyncEnv } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
+// Static, env-only status: green if required env vars load, red otherwise.
+// Deliberately does not connect to Framer, so rendering `/` issues no API call.
 export default function HomePage() {
   let title = "ok";
   let color = "#22c55e";

@@ -32,7 +32,7 @@ export async function syncPressReleasesToFramer(
   const previousFingerprint = await collection.getPluginData(FINGERPRINT_KEY);
   const contentChanged = fingerprint !== previousFingerprint;
 
-  if (contentChanged && items.length > 0) {
+  if (contentChanged) {
     const framerItems = items.map((item) => {
       const id = String(item.Identifier);
       return {
