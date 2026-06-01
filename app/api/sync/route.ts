@@ -1,22 +1,23 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { isCronAuthorized } from "@/lib/auth-cron";
-import { runSyncNextResponse } from "@/lib/sync-route";
+import { NextResponse } from "next/server";
+import { isAuthorizedCronRequest } from "@/lib/auth-cron";
+import { loadSyncEnv } from "@/lib/env";
+import { runSync } from "@/lib/sync/run-sync";
 
 export const dynamic = "force-dynamic";
-/** Vercel / Fluid: raise if sync exceeds default (often 10s on Hobby). */
-export const maxDuration = 300;
+export const maxDuration = 60;
 
-export async function GET(request: NextRequest) {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) {
-    return NextResponse.json(
-      { ok: false, error: "CRON_SECRET not configured" },
-      { status: 500 },
-    );
-  }
-  if (!isCronAuthorized(request)) {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  try {
+    const env = loadSyncEnv();
 
-  return runSyncNextResponse();
+    if (!isAuthorizedCronRequest(request, env.cronSecret)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const result = await runSync(env);
+    return NextResponse.json({ ok: true, ...result });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Sync failed";
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+  }
 }

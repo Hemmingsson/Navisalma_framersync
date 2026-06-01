@@ -1,0 +1,513 @@
+.feedDemo {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface2: #242836;
+  --border: #2e3345;
+  --text: #e8eaef;
+  --muted: #9aa3b5;
+  --accent: #5b8def;
+  --accent-hover: #7aa3f5;
+  --success: #3ecf8e;
+  --warning: #f5a623;
+  --danger: #ef5b5b;
+  --radius: 10px;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "SF Pro Text", system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+}
+
+.header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.header p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.headerLinks {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.headerLinks a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  min-height: calc(100vh - 73px);
+}
+
+@media (max-width: 960px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sidebar {
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  overflow: auto;
+  max-height: calc(100vh - 73px);
+}
+
+.main {
+  overflow: auto;
+  max-height: calc(100vh - 73px);
+  padding: 1.25rem 1.5rem 2rem;
+}
+
+.section {
+  border-bottom: 1px solid var(--border);
+  padding: 1rem 1.25rem;
+}
+
+.section h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.field {
+  margin-bottom: 0.75rem;
+}
+
+.field label {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.875rem;
+}
+
+.field textarea {
+  min-height: 2.5rem;
+  resize: vertical;
+}
+
+.field small {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.checkRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.checkRow input {
+  width: auto;
+}
+
+.actions {
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.button {
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.buttonPrimary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.buttonPrimary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.buttonSecondary {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.urlBox {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.875rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.urlBox label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.urlBox code {
+  display: block;
+  word-break: break-all;
+  font-size: 0.8125rem;
+  color: var(--accent);
+}
+
+.statusBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.chip {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.chip strong {
+  color: var(--text);
+}
+
+.chipOk strong {
+  color: var(--success);
+}
+
+.chipWarn strong {
+  color: var(--warning);
+}
+
+.chipErr strong {
+  color: var(--danger);
+}
+
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.tab {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.tabActive {
+  color: var(--text);
+  border-color: var(--accent);
+  background: rgba(91, 141, 239, 0.12);
+}
+
+.empty {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.itemList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.itemCard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.itemHeader {
+  width: 100%;
+  background: none;
+  border: none;
+  color: inherit;
+  text-align: left;
+  padding: 1rem 1.1rem;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.itemHeader:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.itemTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.itemMeta {
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.itemChevron {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.itemBody {
+  border-top: 1px solid var(--border);
+  padding: 1rem 1.1rem 1.25rem;
+}
+
+.sectionLabel {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+
+.htmlHint {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.metaGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.8125rem;
+}
+
+.metaGrid dt {
+  color: var(--muted);
+}
+
+.metaGrid dd {
+  margin: 0;
+  word-break: break-word;
+}
+
+.bodyPreview {
+  background: #fff;
+  color: #111;
+  border-radius: 8px;
+  padding: 1rem;
+  overflow: auto;
+  max-height: 420px;
+  font-size: 0.9375rem;
+}
+
+.bodyPreview img {
+  max-width: 100%;
+  height: auto;
+}
+
+.rawBox {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  overflow: auto;
+  max-height: 70vh;
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--muted);
+}
+
+.errorBox {
+  background: rgba(239, 91, 91, 0.1);
+  border: 1px solid rgba(239, 91, 91, 0.35);
+  border-radius: var(--radius);
+  padding: 1rem;
+  color: #ffb4b4;
+  margin-bottom: 1rem;
+}
+
+.channelBox {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.channelBox h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+}
+
+.channelBox p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.sectionHeader h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.sectionHeader p {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.sectionHeader a {
+  color: var(--accent);
+}
+
+.externalLink {
+  flex-shrink: 0;
+  color: var(--accent);
+  font-size: 0.8125rem;
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.4rem 0.75rem;
+  background: var(--surface2);
+}
+
+.externalLink:hover {
+  border-color: var(--accent);
+}
+
+.jsonCrackSection,
+.tableSection {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.jsonCrackFrame {
+  width: 100%;
+  height: 520px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.tableWrap {
+  overflow: auto;
+  max-height: 60vh;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.dataTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.dataTable th,
+.dataTable td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.dataTable th {
+  position: sticky;
+  top: 0;
+  background: var(--surface2);
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dataTable tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dataTable a {
+  color: var(--accent);
+}
+
+.colTitle {
+  min-width: 220px;
+  max-width: 320px;
+}
+
+.colSummary {
+  min-width: 240px;
+  max-width: 360px;
+  color: var(--muted);
+}
+
+.colUrl {
+  white-space: nowrap;
+}
