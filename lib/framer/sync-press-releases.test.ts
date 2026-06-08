@@ -54,7 +54,9 @@ describe("syncPressReleasesToFramer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCollection.getItemIds.mockResolvedValue(["id-a", "id-c"]);
-    mockCollection.getPluginData.mockResolvedValue(null);
+    mockCollection.getPluginData.mockImplementation(async (key: string) =>
+      key === "coverImageSyncVersion" ? "2" : null,
+    );
     mockFramer.createManagedCollection.mockResolvedValue(mockCollection);
     mockCollection.setPluginData.mockResolvedValue(undefined);
     mockCollection.addItems.mockResolvedValue(undefined);
@@ -75,8 +77,13 @@ describe("syncPressReleasesToFramer", () => {
       collection: "Notified_Feed",
       published: false,
     });
+    expect(mockCollection.addItems).toHaveBeenCalledTimes(1);
     expect(mockCollection.addItems).toHaveBeenCalledWith([
-      expect.objectContaining({ id: "id-a", slug: "id-a" }),
+      expect.objectContaining({
+        id: "id-a",
+        slug: "id-a",
+        fieldData: expect.objectContaining({ title: expect.any(Object) }),
+      }),
       expect.objectContaining({ id: "id-b", slug: "id-b" }),
     ]);
     expect(mockCollection.removeItems).toHaveBeenCalledWith(["id-c"]);
@@ -86,9 +93,11 @@ describe("syncPressReleasesToFramer", () => {
   it("skips upsert when fingerprint is unchanged", async () => {
     const { feedFingerprint } = await import("./schema");
     const feedFp = feedFingerprint(sampleItems);
-    mockCollection.getPluginData.mockImplementation(async (key: string) =>
-      key === "lastFeedFingerprint" ? feedFp : null,
-    );
+    mockCollection.getPluginData.mockImplementation(async (key: string) => {
+      if (key === "lastFeedFingerprint") return feedFp;
+      if (key === "coverImageSyncVersion") return "2";
+      return null;
+    });
     mockCollection.getItemIds.mockResolvedValue(["id-a", "id-b"]);
 
     const result = await syncPressReleasesToFramer(env, sampleItems);
@@ -106,17 +115,30 @@ describe("syncPressReleasesToFramer", () => {
     expect(mockCollection.removeItems).not.toHaveBeenCalled();
   });
 
+  it("skips when another sync holds the lock", async () => {
+    mockCollection.getPluginData.mockImplementation(async (key: string) => {
+      if (key === "syncInProgress") {
+        return JSON.stringify({ startedAt: new Date().toISOString() });
+      }
+      return null;
+    });
+
+    const result = await syncPressReleasesToFramer(env, sampleItems);
+
+    expect(result).toMatchObject({ skipped: true, upserted: 0, changed: false });
+    expect(mockCollection.addItems).not.toHaveBeenCalled();
+  });
+
   it("skips setFields when schema fingerprint is unchanged", async () => {
     const { feedFingerprint, schemaFingerprint } = await import("./schema");
     const feedFp = feedFingerprint(sampleItems);
     const schemaFp = schemaFingerprint();
-    mockCollection.getPluginData.mockImplementation(async (key: string) =>
-      key === "lastSchemaFingerprint"
-        ? schemaFp
-        : key === "lastFeedFingerprint"
-          ? feedFp
-          : null,
-    );
+    mockCollection.getPluginData.mockImplementation(async (key: string) => {
+      if (key === "lastSchemaFingerprint") return schemaFp;
+      if (key === "lastFeedFingerprint") return feedFp;
+      if (key === "coverImageSyncVersion") return "2";
+      return null;
+    });
     mockCollection.getItemIds.mockResolvedValue(["id-a", "id-b"]);
 
     await syncPressReleasesToFramer(env, sampleItems);

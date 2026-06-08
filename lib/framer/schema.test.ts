@@ -85,9 +85,22 @@ describe("schema", () => {
     expect(fieldData.coverImage).toEqual({
       type: "image",
       value: "https://example.com/cover.png",
+      alt: "Einride announces listing",
     });
     expect(fieldData.releaseDateTime?.value).toBe(new Date("2026-05-19T06:00:00Z").toISOString());
     expect(fieldData.modifiedDate?.value).toBe(new Date("2026-05-19T07:00:00Z").toISOString());
+  });
+
+  it("omits image fields when the vendor value is empty", () => {
+    const fieldData = jsonFeedItemToFieldData({
+      ...sampleItem,
+      Logo: [],
+      OrgLogo: {},
+      Content: "<p>text only</p>",
+    });
+    expect(fieldData.logoImage).toBeUndefined();
+    expect(fieldData.orgLogoImage).toBeUndefined();
+    expect(fieldData.coverImage).toBeUndefined();
   });
 
   it("throws on an unparseable date", () => {

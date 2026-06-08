@@ -33,4 +33,5 @@ export type SyncResult = {
   changed: boolean;
   collection: string;
   published: boolean;
+  skipped?: boolean;
 };

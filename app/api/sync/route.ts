@@ -4,7 +4,8 @@ import { loadSyncEnv } from "@/lib/env";
 import { runSync } from "@/lib/sync/run-sync";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+/** Schema migrations upsert all items + publish; needs headroom on Vercel Pro. */
+export const maxDuration = 300;
 
 export async function GET(request: Request) {
   try {

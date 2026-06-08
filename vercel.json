@@ -4,5 +4,10 @@
       "path": "/api/sync",
       "schedule": "* * * * *"
     }
-  ]
+  ],
+  "functions": {
+    "app/api/sync/route.ts": {
+      "maxDuration": 300
+    }
+  }
 }

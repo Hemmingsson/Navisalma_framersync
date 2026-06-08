@@ -79,6 +79,20 @@ function extractImageUrl(value: unknown): string | null {
   return null;
 }
 
+/** Framer ignores or mishandles image fields with null values — omit those keys entirely. */
+export function imageFieldData(
+  url: string | null | undefined,
+  alt?: string,
+): { type: "image"; value: string; alt?: string } | undefined {
+  if (!url?.trim()) return undefined;
+  const entry: { type: "image"; value: string; alt?: string } = {
+    type: "image",
+    value: url.trim(),
+  };
+  if (alt?.trim()) entry.alt = alt.trim();
+  return entry;
+}
+
 export function parseFeedDate(value: string | undefined, fieldName: string): string | undefined {
   if (!value?.trim()) return undefined;
   const parsed = new Date(value);
@@ -129,9 +143,11 @@ export function jsonFeedItemToFieldData(item: JsonFeedItem) {
       case "boolean":
         fieldData[id] = { type: "boolean", value: raw === true };
         break;
-      case "image":
-        fieldData[id] = { type: "image", value: extractImageUrl(raw) };
+      case "image": {
+        const image = imageFieldData(extractImageUrl(raw));
+        if (image) fieldData[id] = image;
         break;
+      }
       case "date": {
         // Missing/empty dates are dropped (no column value); unparseable dates throw.
         const parsed = parseFeedDate(typeof raw === "string" ? raw : undefined, id);
@@ -141,10 +157,11 @@ export function jsonFeedItemToFieldData(item: JsonFeedItem) {
     }
   }
 
-  fieldData[COVER_IMAGE_FIELD_ID] = {
-    type: "image",
-    value: firstImageUrlFromHtml(item.Content),
-  };
+  const coverImage = imageFieldData(
+    firstImageUrlFromHtml(item.Content),
+    typeof item.Title === "string" ? item.Title : undefined,
+  );
+  if (coverImage) fieldData[COVER_IMAGE_FIELD_ID] = coverImage;
 
   return fieldData;
 }
