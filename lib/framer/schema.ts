@@ -3,7 +3,10 @@ import type { ManagedCollectionFieldInput } from "framer-api";
 import { formatJsonFeedValue } from "../rss/parse-json-feed";
 import type { JsonFeedItem } from "../rss/types";
 
-/** Canonical JsonFeed key → Framer field mapping (20 vendor keys). */
+/** First `<img src>` in Content HTML — Framer cover bindings (not a vendor key). */
+export const COVER_IMAGE_FIELD_ID = "coverImage";
+
+/** Canonical JsonFeed key → Framer field mapping (22 vendor keys). */
 export const JSON_FEED_FIELD_MAP = [
   { id: "title", name: "Title", framerType: "string", jsonKey: "Title" },
   { id: "releaseDateTime", name: "Release Date Time", framerType: "date", jsonKey: "ReleaseDateTime" },
@@ -25,10 +28,18 @@ export const JSON_FEED_FIELD_MAP = [
   { id: "logoImage", name: "Logo", framerType: "image", jsonKey: "Logo" },
   { id: "orgLogoImage", name: "Org Logo", framerType: "image", jsonKey: "OrgLogo" },
   { id: "orgName", name: "Org Name", framerType: "string", jsonKey: "OrgName" },
+  { id: "relatedLinks", name: "Related Links", framerType: "string", jsonKey: "RelatedLinks" },
+  { id: "widgetAttachment", name: "Widget Attachment", framerType: "string", jsonKey: "WidgetAttachment" },
 ] as const;
 
+export function firstImageUrlFromHtml(html: unknown): string | null {
+  if (typeof html !== "string" || !html.trim()) return null;
+  const match = html.match(/<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i);
+  return match?.[1]?.trim() || null;
+}
+
 export function buildCollectionFields(): ManagedCollectionFieldInput[] {
-  return JSON_FEED_FIELD_MAP.map(({ id, name, framerType }) => {
+  const mapped = JSON_FEED_FIELD_MAP.map(({ id, name, framerType }) => {
     switch (framerType) {
       case "formattedText":
         return { id, name, type: "formattedText" as const };
@@ -44,6 +55,8 @@ export function buildCollectionFields(): ManagedCollectionFieldInput[] {
         return { id, name, type: "string" as const };
     }
   });
+
+  return [{ id: COVER_IMAGE_FIELD_ID, name: "Cover Image", type: "image" as const }, ...mapped];
 }
 
 export function schemaFingerprint(): string {
@@ -127,6 +140,11 @@ export function jsonFeedItemToFieldData(item: JsonFeedItem) {
       }
     }
   }
+
+  fieldData[COVER_IMAGE_FIELD_ID] = {
+    type: "image",
+    value: firstImageUrlFromHtml(item.Content),
+  };
 
   return fieldData;
 }

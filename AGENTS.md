@@ -20,8 +20,6 @@ Manual sync:
 curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/sync
 ```
 
-Dev-only feed explorer: `/feed-demo`, `/api/feed-preview` (404 in production via `middleware.ts`).
-
 Production routes: `/` (status dot only), `/api/health`, `/api/sync` (Bearer auth).
 
 | Health | Auth | Behavior |
@@ -64,9 +62,6 @@ Loader: `lib/env.ts` → `loadSyncEnv()`. Defaults: `lib/config.ts`.
 app/page.tsx                       Status dot only
 app/api/sync/route.ts              Sync entrypoint
 app/api/health/route.ts            Shallow + deep health
-app/api/feed-preview/route.ts      Feed explorer API (dev)
-app/feed-demo/                     Feed explorer UI (dev)
-middleware.ts                      Dev-only gate for explorer
 lib/sync/run-sync.ts               Paginated fetch → Framer
 lib/rss/fetch-all-feed.ts          JsonFeed pagination (max 100/page)
 lib/rss/parse-json-feed.ts         Parse + normalize vendor JSON
@@ -84,7 +79,7 @@ lib/framer/last-sync.ts            Last sync metadata + status helper
 4. `setFields` runs only when the schema fingerprint changes, not every tick; upsert when the feed fingerprint changes; reconcile deletes CMS ids not in the full snapshot.
 5. Publish + deploy when `AUTO_PUBLISH` and content changed or items removed.
 
-**CMS fields:** 20 vendor keys → Framer columns. Canonical list: `JSON_FEED_FIELD_MAP` in `lib/framer/schema.ts`. Full table: keeping-up `docs/NOTIFIED-FEED-SYNC.md`.
+**CMS fields:** 22 vendor keys → Framer columns, plus **Cover Image** (first `<img src>` in `Content`). Canonical list: `JSON_FEED_FIELD_MAP` + `COVER_IMAGE_FIELD_ID` in `lib/framer/schema.ts`. Full table: keeping-up `docs/NOTIFIED-FEED-SYNC.md`.
 
 ## Conventions
 

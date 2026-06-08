@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCollectionFields,
+  COVER_IMAGE_FIELD_ID,
   feedFingerprint,
+  firstImageUrlFromHtml,
   idsToRemove,
   JSON_FEED_FIELD_MAP,
   jsonFeedItemToFieldData,
@@ -20,7 +22,7 @@ const sampleItem: JsonFeedItem = {
   Keywords: "Electric, Trucking",
   StockTickers: "ERN",
   Identifier: 12345,
-  Content: "<p>Body copy</p>",
+  Content: '<p>Body copy</p><img src="https://example.com/cover.png" alt="cover" />',
   ContentSummary: "Short summary",
   Summary: "Alt summary line",
   NewsArchiveTags: "tag-a",
@@ -35,10 +37,18 @@ const sampleItem: JsonFeedItem = {
 };
 
 describe("schema", () => {
-  it("defines all JsonFeed-backed Framer fields", () => {
+  it("defines cover image plus all JsonFeed-backed Framer fields", () => {
     const ids = buildCollectionFields().map((field) => field.id);
-    expect(ids).toEqual(JSON_FEED_FIELD_MAP.map((field) => field.id));
-    expect(ids).toHaveLength(20);
+    expect(ids).toEqual([COVER_IMAGE_FIELD_ID, ...JSON_FEED_FIELD_MAP.map((field) => field.id)]);
+    expect(ids).toHaveLength(23);
+  });
+
+  it("extracts the first image URL from Content HTML", () => {
+    expect(firstImageUrlFromHtml('<p>x</p><img src="https://example.com/a.png" />')).toBe(
+      "https://example.com/a.png",
+    );
+    expect(firstImageUrlFromHtml("<p>no image</p>")).toBeNull();
+    expect(firstImageUrlFromHtml(undefined)).toBeNull();
   });
 
   it("maps every JsonFeed field into Framer columns", () => {
@@ -52,7 +62,7 @@ describe("schema", () => {
     expect(fieldData.content).toMatchObject({
       type: "formattedText",
       contentType: "html",
-      value: "<p>Body copy</p>",
+      value: sampleItem.Content,
     });
     expect(fieldData.contentSummary).toEqual({ type: "string", value: "Short summary" });
     expect(fieldData.summary).toEqual({ type: "string", value: "Alt summary line" });
@@ -67,8 +77,15 @@ describe("schema", () => {
     expect(fieldData.logoImage).toEqual({ type: "image", value: "https://example.com/logo.png" });
     expect(fieldData.orgLogoImage).toEqual({ type: "image", value: "https://example.com/org.png" });
     expect(fieldData.orgName).toEqual({ type: "string", value: "Einride AB" });
-    expect(fieldData.widgetAttachment).toBeUndefined();
-    expect(fieldData.relatedLinks).toBeUndefined();
+    expect(fieldData.relatedLinks).toEqual({
+      type: "string",
+      value: '{"url":"https://example.com/related"}',
+    });
+    expect(fieldData.widgetAttachment).toEqual({ type: "string", value: '{"type":"embed"}' });
+    expect(fieldData.coverImage).toEqual({
+      type: "image",
+      value: "https://example.com/cover.png",
+    });
     expect(fieldData.releaseDateTime?.value).toBe(new Date("2026-05-19T06:00:00Z").toISOString());
     expect(fieldData.modifiedDate?.value).toBe(new Date("2026-05-19T07:00:00Z").toISOString());
   });
