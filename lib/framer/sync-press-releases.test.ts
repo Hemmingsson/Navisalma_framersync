@@ -8,6 +8,7 @@ const mockCollection = {
   setPluginData: vi.fn(),
   addItems: vi.fn(),
   removeItems: vi.fn(),
+  setItemOrder: vi.fn(),
   setFields: vi.fn(),
 };
 
@@ -61,6 +62,7 @@ describe("syncPressReleasesToFramer", () => {
     mockCollection.setPluginData.mockResolvedValue(undefined);
     mockCollection.addItems.mockResolvedValue(undefined);
     mockCollection.removeItems.mockResolvedValue(undefined);
+    mockCollection.setItemOrder.mockResolvedValue(undefined);
     mockCollection.setFields.mockResolvedValue(undefined);
     mockFramer.publish.mockResolvedValue({ deployment: { id: "dep-1" } });
     mockFramer.deploy.mockResolvedValue(undefined);
@@ -87,6 +89,7 @@ describe("syncPressReleasesToFramer", () => {
       expect.objectContaining({ id: "id-b", slug: "id-b" }),
     ]);
     expect(mockCollection.removeItems).toHaveBeenCalledWith(["id-c"]);
+    expect(mockCollection.setItemOrder).toHaveBeenCalledWith(["id-a", "id-b"]);
     expect(mockCollection.setFields).toHaveBeenCalled();
   });
 
@@ -106,6 +109,25 @@ describe("syncPressReleasesToFramer", () => {
     expect(result.changed).toBe(false);
     expect(mockCollection.addItems).not.toHaveBeenCalled();
     expect(mockCollection.removeItems).not.toHaveBeenCalled();
+    expect(mockCollection.setItemOrder).not.toHaveBeenCalled();
+  });
+
+  it("reorders the collection when feed content is unchanged", async () => {
+    const { feedFingerprint } = await import("./schema");
+    const feedFp = feedFingerprint(sampleItems);
+    mockCollection.getPluginData.mockImplementation(async (key: string) => {
+      if (key === "lastFeedFingerprint") return feedFp;
+      if (key === "coverImageSyncVersion") return "2";
+      return null;
+    });
+    mockCollection.getItemIds.mockResolvedValue(["id-b", "id-a"]);
+
+    const result = await syncPressReleasesToFramer(env, sampleItems);
+
+    expect(result.upserted).toBe(0);
+    expect(result.changed).toBe(true);
+    expect(mockCollection.addItems).not.toHaveBeenCalled();
+    expect(mockCollection.setItemOrder).toHaveBeenCalledWith(["id-a", "id-b"]);
   });
 
   it("refuses to reconcile an empty feed", async () => {

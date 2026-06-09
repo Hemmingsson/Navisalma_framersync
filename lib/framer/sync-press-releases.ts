@@ -84,9 +84,13 @@ export async function syncPressReleasesToFramer(
   }
 
   try {
-    const feedIds = new Set(items.map((item) => String(item.Identifier)));
+    const orderedFeedIds = items.map((item) => String(item.Identifier));
+    const feedIds = new Set(orderedFeedIds);
     const cmsIds = await collection.getItemIds();
     const removedIds = idsToRemove(feedIds, cmsIds);
+    const orderChanged =
+      orderedFeedIds.length !== cmsIds.length ||
+      orderedFeedIds.some((id, index) => cmsIds[index] !== id);
     const fingerprint = feedFingerprint(items);
     const previousFingerprint = await collection.getPluginData(FINGERPRINT_KEY);
     const coverSyncVersion = await collection.getPluginData(COVER_IMAGE_SYNC_VERSION_KEY);
@@ -101,7 +105,11 @@ export async function syncPressReleasesToFramer(
       await collection.removeItems(removedIds);
     }
 
-    const changed = contentChanged || removedIds.length > 0;
+    if (orderChanged) {
+      await collection.setItemOrder(orderedFeedIds);
+    }
+
+    const changed = contentChanged || removedIds.length > 0 || orderChanged;
     let published = false;
     if (env.autoPublish && changed) {
       const { deployment } = await framer.publish();
