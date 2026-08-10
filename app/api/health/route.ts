@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { connect } from "framer-api";
 import { loadSyncEnv } from "@/lib/env";
-import { feedPageUrl } from "@/lib/rss/fetch-all-feed";
+import { FEED_FETCH_HEADERS, feedPageUrl } from "@/lib/rss/fetch-all-feed";
 import { parseJsonFeed } from "@/lib/rss/parse-json-feed";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
     const probeUrl = feedPageUrl(env.feedUrl, 0, 1);
     const feedResponse = await fetch(probeUrl, {
-      headers: { Accept: "application/json" },
+      headers: FEED_FETCH_HEADERS,
       cache: "no-store",
     });
 

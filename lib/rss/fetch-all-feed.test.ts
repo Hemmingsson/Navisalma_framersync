@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { fetchAllFeedItems, feedPageUrl, stripFeedPaging } from "./fetch-all-feed";
+import { FEED_USER_AGENT } from "../config";
+import { FEED_FETCH_HEADERS, fetchAllFeedItems, feedPageUrl, stripFeedPaging } from "./fetch-all-feed";
 
 describe("fetch-all-feed", () => {
   it("strips existing paging segments", () => {
@@ -46,8 +47,15 @@ describe("fetch-all-feed", () => {
       expect(pages).toBe(2);
       expect(items).toHaveLength(101);
       expect(fetch).toHaveBeenCalledTimes(2);
-      expect(fetch).toHaveBeenCalledWith(feedPageUrl(base, 0), expect.any(Object));
-      expect(fetch).toHaveBeenCalledWith(feedPageUrl(base, 100), expect.any(Object));
+      expect(fetch).toHaveBeenCalledWith(feedPageUrl(base, 0), {
+        headers: FEED_FETCH_HEADERS,
+        cache: "no-store",
+      });
+      expect(fetch).toHaveBeenCalledWith(feedPageUrl(base, 100), {
+        headers: FEED_FETCH_HEADERS,
+        cache: "no-store",
+      });
+      expect(FEED_FETCH_HEADERS["User-Agent"]).toBe(FEED_USER_AGENT);
     });
 
     it("throws when pagination exceeds the max page cap", async () => {

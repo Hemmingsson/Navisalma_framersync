@@ -1,8 +1,14 @@
+import { FEED_USER_AGENT } from "../config";
 import { parseJsonFeed } from "./parse-json-feed";
 import type { JsonFeedItem } from "./types";
 
 export const FEED_PAGE_SIZE = 100;
 const MAX_PAGES = 200;
+
+export const FEED_FETCH_HEADERS = {
+  Accept: "application/json",
+  "User-Agent": FEED_USER_AGENT,
+} as const;
 
 /** Remove paging segments so we can append our own /max and /start. */
 export function stripFeedPaging(url: string): string {
@@ -19,7 +25,7 @@ export function feedPageUrl(baseUrl: string, start: number, pageSize = FEED_PAGE
 
 async function fetchFeedPage(url: string): Promise<JsonFeedItem[]> {
   const response = await fetch(url, {
-    headers: { Accept: "application/json" },
+    headers: FEED_FETCH_HEADERS,
     cache: "no-store",
   });
 
