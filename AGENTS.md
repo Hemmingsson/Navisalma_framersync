@@ -165,4 +165,4 @@ Framer's native form (Investors → "Sign up for insight") posts to a webhook; t
   - HubSpot other 4xx, or no email → `200 { ok: false, error }` + `console.error` (retrying cannot help; check Vercel logs)
 - Retries can create duplicate *submissions* in HubSpot; contacts are deduped by email.
 - Server-side submit has no `hubspotutk` cookie or visitor IP, so HubSpot won't tie the submission to prior page views.
-- **Open:** GDPR `legalConsentOptions` — pending HubSpot form privacy settings. If required, add a consent checkbox in Framer and map it in `submit.ts`.
+- No `legalConsentOptions`: the HubSpot form has no consent checkbox (confirmed 2026-09-25). If one is added in HubSpot, add a checkbox in Framer and map it in `submit.ts`.
