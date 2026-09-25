@@ -21,11 +21,12 @@ npm run build
 
 | Route | Auth | Behavior |
 |-------|------|----------|
-| `GET /` | none | Green dot if every feature's env loads; red (hover for details) otherwise. No Framer/feed calls. |
+| `GET /` | none | Status page: logo + a green/red dot per feature (env loads?), deployed commit. No Framer/feed/HubSpot calls. |
 | `GET /api/health` | none | `{ ok, features: { <name>: "ok" \| "<env error>" } }`; 503 if any feature is misconfigured |
 | `GET /api/health?deep=1` | none | Framer connect + JsonFeed probe (`max/1`), validates JSON array |
 | `GET /api/sync` | Bearer `CRON_SECRET` | Notified sync (see below) |
 | `POST /api/forms/newsletter` | `Framer-Signature` HMAC | Framer form → HubSpot (see below) |
+| `GET /api/forms/newsletter` | none | Same status page as `/` (`middleware.ts` rewrite), so the webhook URL is browsable |
 
 ## Deploy
 
