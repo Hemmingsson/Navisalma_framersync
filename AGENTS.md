@@ -5,6 +5,7 @@
 | Feature | Folder | Route | Trigger |
 |---------|--------|-------|---------|
 | Notified sync | `lib/features/notified-sync/` | `GET /api/sync` | Vercel cron, every minute |
+| HubSpot newsletter | `lib/features/hubspot-newsletter/` | `POST /api/forms/newsletter` | Framer form webhook |
 
 ## Commands
 
@@ -20,10 +21,11 @@ npm run build
 
 | Route | Auth | Behavior |
 |-------|------|----------|
-| `GET /` | none | Green dot if env loads; red on missing env. No Framer/feed calls. |
-| `GET /api/health` | none | `{ ok: true }` if env loads |
+| `GET /` | none | Green dot if every feature's env loads; red (hover for details) otherwise. No Framer/feed calls. |
+| `GET /api/health` | none | `{ ok, features: { <name>: "ok" \| "<env error>" } }`; 503 if any feature is misconfigured |
 | `GET /api/health?deep=1` | none | Framer connect + JsonFeed probe (`max/1`), validates JSON array |
 | `GET /api/sync` | Bearer `CRON_SECRET` | Notified sync (see below) |
+| `POST /api/forms/newsletter` | `Framer-Signature` HMAC | Framer form → HubSpot (see below) |
 
 ## Deploy
 
@@ -35,7 +37,7 @@ Production: `https://navisalma-framersync.vercel.app`
 |------|-------|
 | Env vars set | see Environment per feature |
 | Cron running | Vercel → Cron Jobs |
-| Health | `GET /api/health` → `{ ok: true }` |
+| Health | `GET /api/health` → `ok: true`, every feature `"ok"` |
 
 Copy `.env.example` → `.env`. Never commit `.env`.
 
@@ -45,13 +47,15 @@ Copy `.env.example` → `.env`. Never commit `.env`.
 app/page.tsx                 Env-only status dot
 app/api/health/route.ts      Shallow + deep health
 app/api/sync/route.ts        Notified sync entrypoint
+app/api/forms/newsletter/    Framer form webhook → HubSpot
+lib/features/env-status.ts   Registry of feature env loaders (health + `/`)
 lib/shared/                  Code used by more than one feature (auth, env helpers)
 lib/features/<feature>/      One folder per feature; owns its env loader, config, tests
 ```
 
 ## Conventions
 
-- New feature → new folder in `lib/features/` with its own `env.ts` loader. A feature must not require another feature's env vars.
+- New feature → new folder in `lib/features/` with its own `env.ts` loader, registered in `lib/features/env-status.ts`. A feature must not require another feature's env vars.
 - Only move code to `lib/shared/` once a second feature needs it.
 - Route handlers stay thin: load env, check auth, call the feature, return JSON.
 - Run `npm test && npm run build` before finishing.
@@ -128,3 +132,35 @@ Optional `skipped: true` when another sync holds the lock.
 
 - JsonFeed code in `rss/`, Framer writes in `framer/`.
 - Item id = `String(Identifier)`; slug matches id.
+
+---
+
+## Feature: HubSpot newsletter
+
+Framer's native form (Investors → "Sign up for insight") posts to a webhook; this route verifies the signature, reshapes the flat Framer JSON into HubSpot's `{ fields: [{ name, value }] }` and submits it to the HubSpot form **Investor Relations Newsletter form** (EU data centre, unauthenticated Forms v3 `integration/submit` endpoint — no HubSpot API key involved).
+
+### Framer setup
+
+1. Form input **names** must be exactly `firstname`, `lastname`, `email` (HubSpot internal names). Other inputs are dropped.
+2. Form → Send to → **Webhook**: `https://<vercel-domain>/api/forms/newsletter`.
+3. Webhook **Secret** = `FRAMER_FORM_WEBHOOK_SECRET` (min 32 chars).
+
+### Environment
+
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `HUBSPOT_PORTAL_ID` | yes | — | HubSpot portal (public) |
+| `HUBSPOT_FORM_GUID` | yes | — | HubSpot form (public) |
+| `HUBSPOT_SUBMIT_BASE` | no | `https://api-eu1.hsforms.com/submissions/v3/integration/submit` | Region-specific submit base |
+| `FRAMER_FORM_WEBHOOK_SECRET` | yes | — | Framer webhook signing secret — the only secret |
+
+### Behavior
+
+- Signature: `Framer-Signature` = `sha256=` + hex HMAC-SHA256(secret, raw body + `Framer-Webhook-Submission-Id`). Bad/missing → 401.
+- Framer retries non-2xx up to 5 times, so status codes mean "retry?":
+  - HubSpot 2xx → `200 { ok: true }`
+  - HubSpot 429/5xx/network → `502` (Framer retries)
+  - HubSpot other 4xx, or no email → `200 { ok: false, error }` + `console.error` (retrying cannot help; check Vercel logs)
+- Retries can create duplicate *submissions* in HubSpot; contacts are deduped by email.
+- Server-side submit has no `hubspotutk` cookie or visitor IP, so HubSpot won't tie the submission to prior page views.
+- **Open:** GDPR `legalConsentOptions` — pending HubSpot form privacy settings. If required, add a consent checkbox in Framer and map it in `submit.ts`.

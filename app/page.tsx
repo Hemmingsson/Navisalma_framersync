@@ -1,19 +1,21 @@
-import { loadSyncEnv } from "@/lib/features/notified-sync/env";
+import { featureEnvStatus } from "@/lib/features/env-status";
 
 export const dynamic = "force-dynamic";
 
-// Static, env-only status: green if required env vars load, red otherwise.
+// Static, env-only status: green if every feature's env vars load, red otherwise.
 // Deliberately does not connect to Framer, so rendering `/` issues no API call.
 export default function HomePage() {
   let title = "ok";
   let color = "#22c55e";
 
-  try {
-    loadSyncEnv();
-  } catch (err) {
+  const status = featureEnvStatus();
+  if (!status.ok) {
     color = "#ef4444";
-    title = err instanceof Error ? err.message : "Configuration error";
-    console.error(err);
+    title = Object.entries(status.features)
+      .filter(([, message]) => message !== "ok")
+      .map(([name, message]) => `${name}: ${message}`)
+      .join("; ");
+    console.error(title);
   }
 
   return (

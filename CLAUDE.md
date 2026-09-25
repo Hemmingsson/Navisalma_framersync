@@ -5,6 +5,7 @@ Follow [AGENTS.md](./AGENTS.md). Backend for the einride Framer website: one fol
 ## Rules
 
 - A feature owns its `env.ts` loader and must not require another feature's env vars.
+- New feature env loaders go in `lib/features/env-status.ts`.
 - No `app/api/test/` routes. No iframe or feed-demo work in this repo.
 
 ### Notified sync (`lib/features/notified-sync/`)
@@ -19,6 +20,11 @@ Notified/GlobeNewswire JsonFeed field reference: keeping-up repo `docs/NOTIFIED-
 - Field map: `JSON_FEED_FIELD_MAP` in `framer/schema.ts`.
 - Omit null image field keys in upserts (`imageFieldData` in `framer/schema.ts`).
 - Concurrent syncs skip via collection plugin-data lock (`skipped: true` in response).
+
+### HubSpot newsletter (`lib/features/hubspot-newsletter/`)
+
+- Only return non-2xx when a Framer retry can help (HubSpot 429/5xx/network → 502).
+- Always verify `Framer-Signature` over the raw body before parsing.
 
 ## Verify
 

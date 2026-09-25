@@ -17,6 +17,11 @@ vi.mock("@/lib/features/notified-sync/env", () => ({
   })),
 }));
 
+const loadNewsletterEnv = vi.fn(() => ({}));
+vi.mock("@/lib/features/hubspot-newsletter/env", () => ({
+  loadNewsletterEnv: () => loadNewsletterEnv(),
+}));
+
 vi.mock("framer-api", () => ({
   connect: vi.fn(async () => mockFramer),
 }));
@@ -36,7 +41,25 @@ describe("GET /api/health", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual({ ok: true });
+    expect(body).toEqual({ ok: true, features: { notifiedSync: "ok", hubspotNewsletter: "ok" } });
+  });
+
+  it("returns 503 with the failing feature when its env is missing", async () => {
+    loadNewsletterEnv.mockImplementationOnce(() => {
+      throw new Error("Missing required environment variable: HUBSPOT_FORM_GUID");
+    });
+
+    const response = await GET(new Request("http://localhost/api/health"));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body).toEqual({
+      ok: false,
+      features: {
+        notifiedSync: "ok",
+        hubspotNewsletter: "Missing required environment variable: HUBSPOT_FORM_GUID",
+      },
+    });
   });
 
   it("validates JsonFeed body on deep check", async () => {
