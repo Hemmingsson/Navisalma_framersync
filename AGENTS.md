@@ -144,6 +144,8 @@ Framer's native form (Investors → "Sign up for insight") posts to a webhook; t
 1. Form input **names** must be exactly `firstname`, `lastname`, `email` (HubSpot internal names). Other inputs are dropped.
 2. Form → Send to → **Webhook**: `https://einride-framer-things.vercel.app/api/forms/newsletter`.
 3. Webhook **Secret** = `FRAMER_FORM_WEBHOOK_SECRET` (min 32 chars).
+4. Webhook **Fallback** email is required — publish fails with "Form not configured" without it. Framer emails it if the webhook keeps failing.
+5. Configure every component variant (Desktop, Phone, …); each has its own form.
 
 ### Environment
 
