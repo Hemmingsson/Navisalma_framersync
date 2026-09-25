@@ -29,9 +29,9 @@ npm run build
 
 ## Deploy
 
-Push `main` → Vercel project **navisalma-framersync** (to be renamed **einride-framer-things**). Cron: `GET /api/sync` every minute (`vercel.json`, Pro plan). Sync function `maxDuration`: 300s.
+Push `main` → Vercel project **einride-framer-things** (formerly navisalma-framersync). Cron: `GET /api/sync` every minute (`vercel.json`, Pro plan). Sync function `maxDuration`: 300s.
 
-Production: `https://navisalma-framersync.vercel.app`
+Production: `https://einride-framer-things.vercel.app` (old `navisalma-framersync.vercel.app` still serves the same deployment)
 
 | Step | Check |
 |------|-------|
@@ -142,7 +142,7 @@ Framer's native form (Investors → "Sign up for insight") posts to a webhook; t
 ### Framer setup
 
 1. Form input **names** must be exactly `firstname`, `lastname`, `email` (HubSpot internal names). Other inputs are dropped.
-2. Form → Send to → **Webhook**: `https://<vercel-domain>/api/forms/newsletter`.
+2. Form → Send to → **Webhook**: `https://einride-framer-things.vercel.app/api/forms/newsletter`.
 3. Webhook **Secret** = `FRAMER_FORM_WEBHOOK_SECRET` (min 32 chars).
 
 ### Environment
