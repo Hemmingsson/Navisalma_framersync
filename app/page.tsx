@@ -3,8 +3,8 @@ import { featureEnvStatus, type FeatureName } from "@/lib/features/env-status";
 export const dynamic = "force-dynamic";
 
 const FEATURE_LABELS: Record<FeatureName, string> = {
-  notifiedSync: "Notified sync",
-  hubspotNewsletter: "Newsletter",
+  notifiedSync: "Notified → Framer CMS",
+  hubspotNewsletter: "Framer form → HubSpot",
 };
 
 // Env-only status: a dot per feature, green if its env vars load.
