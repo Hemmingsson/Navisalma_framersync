@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import type { ManagedCollectionFieldInput } from "framer-api";
 import { formatJsonFeedValue } from "../rss/parse-json-feed";
 import type { JsonFeedItem } from "../rss/types";
+import { contentWithoutCover, resolveCoverImage } from "./cover-image";
 
-/** First `<img src>` in Content HTML — Framer cover bindings (not a vendor key). */
+/** Cover image resolved by `resolveCoverImage` (not a vendor key). */
 export const COVER_IMAGE_FIELD_ID = "coverImage";
 
 /** Canonical JsonFeed key → Framer field mapping (22 vendor keys). */
@@ -31,12 +32,6 @@ export const JSON_FEED_FIELD_MAP = [
   { id: "relatedLinks", name: "Related Links", framerType: "string", jsonKey: "RelatedLinks" },
   { id: "widgetAttachment", name: "Widget Attachment", framerType: "string", jsonKey: "WidgetAttachment" },
 ] as const;
-
-export function firstImageUrlFromHtml(html: unknown): string | null {
-  if (typeof html !== "string" || !html.trim()) return null;
-  const match = html.match(/<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/i);
-  return match?.[1]?.trim() || null;
-}
 
 export function buildCollectionFields(): ManagedCollectionFieldInput[] {
   const mapped = JSON_FEED_FIELD_MAP.map(({ id, name, framerType }) => {
@@ -120,6 +115,7 @@ type FieldDataValue =
 
 export function jsonFeedItemToFieldData(item: JsonFeedItem) {
   const fieldData: Record<string, FieldDataValue> = {};
+  const cover = resolveCoverImage(item);
 
   for (const { id, framerType, jsonKey } of JSON_FEED_FIELD_MAP) {
     const raw = item[jsonKey];
@@ -136,7 +132,7 @@ export function jsonFeedItemToFieldData(item: JsonFeedItem) {
       case "formattedText":
         fieldData[id] = {
           type: "formattedText",
-          value: typeof raw === "string" ? raw : "",
+          value: typeof raw === "string" ? contentWithoutCover(raw, cover) : "",
           contentType: "html",
         };
         break;
@@ -158,7 +154,7 @@ export function jsonFeedItemToFieldData(item: JsonFeedItem) {
   }
 
   const coverImage = imageFieldData(
-    firstImageUrlFromHtml(item.Content),
+    cover?.url,
     typeof item.Title === "string" ? item.Title : undefined,
   );
   if (coverImage) fieldData[COVER_IMAGE_FIELD_ID] = coverImage;

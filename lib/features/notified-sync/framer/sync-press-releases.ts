@@ -16,7 +16,7 @@ const SCHEMA_FINGERPRINT_KEY = "lastSchemaFingerprint";
 const SYNC_LOCK_KEY = "syncInProgress";
 const COVER_IMAGE_SYNC_VERSION_KEY = "coverImageSyncVersion";
 /** Bump when cover-image field handling changes to force one full re-upsert. */
-const COVER_IMAGE_SYNC_VERSION = "2";
+const COVER_IMAGE_SYNC_VERSION = "3";
 const SYNC_LOCK_TTL_MS = 5 * 60 * 1000;
 const UPSERT_BATCH_SIZE = 5;
 

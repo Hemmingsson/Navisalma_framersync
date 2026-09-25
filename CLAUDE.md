@@ -19,6 +19,7 @@ Notified/GlobeNewswire JsonFeed field reference: keeping-up repo `docs/NOTIFIED-
 - `loadSyncEnv()` from `env.ts`.
 - Field map: `JSON_FEED_FIELD_MAP` in `framer/schema.ts`.
 - Omit null image field keys in upserts (`imageFieldData` in `framer/schema.ts`).
+- Cover Image: Notified attachment → Content `<img>` (skip `/media/` pixels) → `legacy-images.json`. See `framer/cover-image.ts`.
 - Concurrent syncs skip via collection plugin-data lock (`skipped: true` in response).
 
 ### HubSpot newsletter (`lib/features/hubspot-newsletter/`)

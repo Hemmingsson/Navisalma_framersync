@@ -104,6 +104,8 @@ rss/feed-settings.ts         Feed query defaults + URL param helpers
 rss/types.ts                 JsonFeedItem + SyncResult types
 framer/sync-press-releases.ts  Upsert, reconcile, publish, sync lock
 framer/schema.ts             CMS fields + JsonFeed mapping (source of truth)
+framer/cover-image.ts        Cover Image resolution + removing it from the body
+legacy-images.json           Identifier → image from the old "Press releases" CMS (generated)
 framer/collection.ts         Find managed collection by name
 framer/last-sync.ts          Last sync metadata stored in collection plugin data
 ```
@@ -111,14 +113,28 @@ framer/last-sync.ts          Last sync metadata stored in collection plugin data
 ### Sync pipeline
 
 1. Paginate `feedUrl` with `/max/100/start/N` until a page returns fewer than 100 items (cap: 200 pages).
-2. Parse JsonFeed array; dedupe by `Identifier`; fail if any item lacks `Identifier`.
+2. Parse JsonFeed array; dedupe by `Identifier` (a release can appear once per language — keep `Language: "en"`); fail if any item lacks `Identifier`.
 3. **Empty feed → error**; sync refuses to reconcile (prevents wiping the collection).
 4. Acquire per-collection sync lock (5 min TTL). If locked, return `{ ok: true, skipped: true, ... }` with zeros.
 5. `setFields` only when schema fingerprint changes; upsert all items when feed fingerprint changes or cover-image migration version bumps.
 6. Reconcile: delete CMS item ids not in the full feed snapshot.
 7. Publish + deploy when `AUTO_PUBLISH` and (`changed` or items removed). Upsert batches of 5.
 
-**CMS fields:** 22 vendor keys → Framer columns, plus **Cover Image** (first `<img src>` in `Content`). Canonical map: `JSON_FEED_FIELD_MAP` + `COVER_IMAGE_FIELD_ID` in `framer/schema.ts`. Omit image fields when URL is null (Framer mishandles null images).
+**CMS fields:** 22 vendor keys → Framer columns, plus **Cover Image**. Canonical map: `JSON_FEED_FIELD_MAP` + `COVER_IMAGE_FIELD_ID` in `framer/schema.ts`. Omit image fields when URL is null (Framer mishandles null images).
+
+**Cover Image** (`framer/cover-image.ts`), first hit wins:
+
+1. `WidgetAttachment[].ImageUrl` with `?size=N` stripped (original resolution; `size=4` is a 70px thumb).
+2. First `<img>` in `Content` that is not a GlobeNewswire `/media/…` 1×1 tracking pixel.
+3. `legacy-images.json` by `Identifier` — images from the pre-Notified "Press releases" CMS for releases Notified has no image for (most releases before Aug 2026).
+
+When the cover comes from Notified, its `<img>` (and a `<p>` wrapper left empty) is removed from `Content` so it isn't shown twice. Legacy covers leave `Content` unchanged. Changing cover logic → bump `COVER_IMAGE_SYNC_VERSION` in `framer/sync-press-releases.ts` (one full re-upsert + publish).
+
+Regenerate the legacy map (read-only against Framer; review the diff before committing):
+
+```bash
+node --env-file=.env scripts/build-legacy-images.mjs
+```
 
 **Sync response** (`GET /api/sync`):
 

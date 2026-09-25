@@ -58,6 +58,21 @@ describe("fetch-all-feed", () => {
       expect(FEED_FETCH_HEADERS["User-Agent"]).toBe(FEED_USER_AGENT);
     });
 
+    it("keeps the English version when a release appears in several languages", async () => {
+      const page = [
+        { Title: "Englisch", Identifier: 7, Language: "de" },
+        { Title: "English", Identifier: 7, Language: "en" },
+        { Title: "Deutsch", Identifier: 8, Language: "de" },
+        { Title: "Anglais", Identifier: 9, Language: "en" },
+        { Title: "Französisch", Identifier: 9, Language: "de" },
+      ];
+      vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(page), { status: 200 }));
+
+      const { items } = await fetchAllFeedItems("https://example.com/JsonFeed/org");
+
+      expect(items.map((item) => item.Title)).toEqual(["English", "Deutsch", "Anglais"]);
+    });
+
     it("throws when pagination exceeds the max page cap", async () => {
       const base =
         "https://rss.globenewswire.com/JsonFeed/organization/abc/content/fulltext/attachments/all";

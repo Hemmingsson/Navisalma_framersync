@@ -3,7 +3,6 @@ import {
   buildCollectionFields,
   COVER_IMAGE_FIELD_ID,
   feedFingerprint,
-  firstImageUrlFromHtml,
   idsToRemove,
   JSON_FEED_FIELD_MAP,
   jsonFeedItemToFieldData,
@@ -43,14 +42,6 @@ describe("schema", () => {
     expect(ids).toHaveLength(23);
   });
 
-  it("extracts the first image URL from Content HTML", () => {
-    expect(firstImageUrlFromHtml('<p>x</p><img src="https://example.com/a.png" />')).toBe(
-      "https://example.com/a.png",
-    );
-    expect(firstImageUrlFromHtml("<p>no image</p>")).toBeNull();
-    expect(firstImageUrlFromHtml(undefined)).toBeNull();
-  });
-
   it("maps every JsonFeed field into Framer columns", () => {
     const fieldData = jsonFeedItemToFieldData(sampleItem);
     expect(fieldData.title).toEqual({ type: "string", value: sampleItem.Title });
@@ -62,7 +53,8 @@ describe("schema", () => {
     expect(fieldData.content).toMatchObject({
       type: "formattedText",
       contentType: "html",
-      value: sampleItem.Content,
+      // The cover image is lifted out of the body.
+      value: "<p>Body copy</p>",
     });
     expect(fieldData.contentSummary).toEqual({ type: "string", value: "Short summary" });
     expect(fieldData.summary).toEqual({ type: "string", value: "Alt summary line" });

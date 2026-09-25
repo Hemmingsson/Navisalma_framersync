@@ -58,7 +58,9 @@ export async function fetchAllFeedItems(
       if (item.Identifier == null || item.Identifier === "") {
         throw new Error("Feed item missing Identifier");
       }
-      seen.set(String(item.Identifier), item);
+      // The same release can appear once per language; keep English when present.
+      const id = String(item.Identifier);
+      if (!seen.has(id) || item.Language === "en") seen.set(id, item);
     }
 
     if (pageItems.length < pageSize) break;

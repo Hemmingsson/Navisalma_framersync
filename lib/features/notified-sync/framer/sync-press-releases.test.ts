@@ -56,7 +56,7 @@ describe("syncPressReleasesToFramer", () => {
     vi.clearAllMocks();
     mockCollection.getItemIds.mockResolvedValue(["id-a", "id-c"]);
     mockCollection.getPluginData.mockImplementation(async (key: string) =>
-      key === "coverImageSyncVersion" ? "2" : null,
+      key === "coverImageSyncVersion" ? "3" : null,
     );
     mockFramer.createManagedCollection.mockResolvedValue(mockCollection);
     mockCollection.setPluginData.mockResolvedValue(undefined);
@@ -98,7 +98,7 @@ describe("syncPressReleasesToFramer", () => {
     const feedFp = feedFingerprint(sampleItems);
     mockCollection.getPluginData.mockImplementation(async (key: string) => {
       if (key === "lastFeedFingerprint") return feedFp;
-      if (key === "coverImageSyncVersion") return "2";
+      if (key === "coverImageSyncVersion") return "3";
       return null;
     });
     mockCollection.getItemIds.mockResolvedValue(["id-a", "id-b"]);
@@ -117,7 +117,7 @@ describe("syncPressReleasesToFramer", () => {
     const feedFp = feedFingerprint(sampleItems);
     mockCollection.getPluginData.mockImplementation(async (key: string) => {
       if (key === "lastFeedFingerprint") return feedFp;
-      if (key === "coverImageSyncVersion") return "2";
+      if (key === "coverImageSyncVersion") return "3";
       return null;
     });
     mockCollection.getItemIds.mockResolvedValue(["id-b", "id-a"]);
@@ -158,7 +158,7 @@ describe("syncPressReleasesToFramer", () => {
     mockCollection.getPluginData.mockImplementation(async (key: string) => {
       if (key === "lastSchemaFingerprint") return schemaFp;
       if (key === "lastFeedFingerprint") return feedFp;
-      if (key === "coverImageSyncVersion") return "2";
+      if (key === "coverImageSyncVersion") return "3";
       return null;
     });
     mockCollection.getItemIds.mockResolvedValue(["id-a", "id-b"]);
