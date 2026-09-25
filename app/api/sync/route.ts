@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { isAuthorizedCronRequest } from "@/lib/auth-cron";
-import { loadSyncEnv } from "@/lib/env";
-import { runSync } from "@/lib/sync/run-sync";
+import { isAuthorizedCronRequest } from "@/lib/shared/auth-cron";
+import { loadSyncEnv } from "@/lib/features/notified-sync/env";
+import { runSync } from "@/lib/features/notified-sync/run-sync";
 
 export const dynamic = "force-dynamic";
 /** Schema migrations upsert all items + publish; needs headroom on Vercel Pro. */

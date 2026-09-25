@@ -6,7 +6,7 @@ const mockFramer = {
   [Symbol.dispose]: vi.fn(),
 };
 
-vi.mock("@/lib/env", () => ({
+vi.mock("@/lib/features/notified-sync/env", () => ({
   loadSyncEnv: vi.fn(() => ({
     framerProjectUrl: "https://example.framer.app",
     framerApiKey: "key",

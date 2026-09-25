@@ -1,18 +1,24 @@
 # CLAUDE.md
 
-Follow [AGENTS.md](./AGENTS.md). Notified/GlobeNewswire JsonFeed field reference: keeping-up repo `docs/NOTIFIED-FEED-SYNC.md`.
+Follow [AGENTS.md](./AGENTS.md). Backend for the einride Framer website: one folder per feature in `lib/features/`, shared code in `lib/shared/`.
 
 ## Rules
 
-- JsonFeed in `lib/rss/`, Framer in `lib/framer/`.
+- A feature owns its `env.ts` loader and must not require another feature's env vars.
+- No `app/api/test/` routes. No iframe or feed-demo work in this repo.
+
+### Notified sync (`lib/features/notified-sync/`)
+
+Notified/GlobeNewswire JsonFeed field reference: keeping-up repo `docs/NOTIFIED-FEED-SYNC.md`.
+
+- JsonFeed in `rss/`, Framer in `framer/`.
 - Paginate the full feed before reconcile deletes (100/page, max 200 pages).
 - Empty feed → sync throws; never wipes the collection.
 - Item id = `String(Identifier)`.
-- `loadSyncEnv()` from `lib/env.ts`.
-- Field map: `JSON_FEED_FIELD_MAP` in `lib/framer/schema.ts`.
-- Omit null image field keys in upserts (`imageFieldData` in `lib/framer/schema.ts`).
+- `loadSyncEnv()` from `env.ts`.
+- Field map: `JSON_FEED_FIELD_MAP` in `framer/schema.ts`.
+- Omit null image field keys in upserts (`imageFieldData` in `framer/schema.ts`).
 - Concurrent syncs skip via collection plugin-data lock (`skipped: true` in response).
-- No `app/api/test/` routes. No iframe or feed-demo work in this repo.
 
 ## Verify
 

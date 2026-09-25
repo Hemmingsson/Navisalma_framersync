@@ -1,3 +1,4 @@
+import { requiredEnv } from "@/lib/shared/env";
 import { DEFAULT_COLLECTION_NAME } from "./config";
 import { buildFeedUrl } from "./rss/build-feed-url";
 import { DEFAULT_FEED_SETTINGS } from "./rss/feed-settings";
@@ -17,9 +18,9 @@ function normalizeFeedUrl(url: string): string {
 
 export function loadSyncEnv(): SyncEnv {
   return {
-    framerProjectUrl: required("FRAMER_PROJECT_URL"),
-    framerApiKey: required("FRAMER_API_KEY"),
-    cronSecret: required("CRON_SECRET"),
+    framerProjectUrl: requiredEnv("FRAMER_PROJECT_URL"),
+    framerApiKey: requiredEnv("FRAMER_API_KEY"),
+    cronSecret: requiredEnv("CRON_SECRET"),
     collectionName: process.env.FRAMER_COLLECTION_NAME?.trim() || DEFAULT_COLLECTION_NAME,
     feedUrl: normalizeFeedUrl(
       process.env.NOTIFIED_FEED_URL?.trim() ||
@@ -28,12 +29,4 @@ export function loadSyncEnv(): SyncEnv {
     ),
     autoPublish: process.env.AUTO_PUBLISH?.trim().toLowerCase() !== "false",
   };
-}
-
-function required(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
 }

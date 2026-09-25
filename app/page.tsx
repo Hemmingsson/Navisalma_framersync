@@ -1,4 +1,4 @@
-import { loadSyncEnv } from "@/lib/env";
+import { loadSyncEnv } from "@/lib/features/notified-sync/env";
 
 export const dynamic = "force-dynamic";
 

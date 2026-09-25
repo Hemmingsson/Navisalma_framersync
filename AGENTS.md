@@ -1,8 +1,10 @@
 # AGENTS.md
 
-**navisalma-framersync** — sync Notified (GlobeNewswire) press releases from JsonFeed into a Framer managed collection (**Notified_Feed** by default).
+**einride-framer-things** — small Next.js backend for the einride Framer website. Each feature is one folder under `lib/features/` plus its route(s) under `app/api/`.
 
-Vendor API and field reference live in the Navisalma **keeping-up** repo: `docs/NOTIFIED-FEED-SYNC.md`, `docs/NOTIFIED-INTEGRATION.md`. Iframe/IR page work is out of scope here.
+| Feature | Folder | Route | Trigger |
+|---------|--------|-------|---------|
+| Notified sync | `lib/features/notified-sync/` | `GET /api/sync` | Vercel cron, every minute |
 
 ## Commands
 
@@ -14,39 +16,64 @@ npm run lint
 npm run build
 ```
 
-Manual sync:
+## Routes
+
+| Route | Auth | Behavior |
+|-------|------|----------|
+| `GET /` | none | Green dot if env loads; red on missing env. No Framer/feed calls. |
+| `GET /api/health` | none | `{ ok: true }` if env loads |
+| `GET /api/health?deep=1` | none | Framer connect + JsonFeed probe (`max/1`), validates JSON array |
+| `GET /api/sync` | Bearer `CRON_SECRET` | Notified sync (see below) |
+
+## Deploy
+
+Push `main` → Vercel project **navisalma-framersync** (to be renamed **einride-framer-things**). Cron: `GET /api/sync` every minute (`vercel.json`, Pro plan). Sync function `maxDuration`: 300s.
+
+Production: `https://navisalma-framersync.vercel.app`
+
+| Step | Check |
+|------|-------|
+| Env vars set | see Environment per feature |
+| Cron running | Vercel → Cron Jobs |
+| Health | `GET /api/health` → `{ ok: true }` |
+
+Copy `.env.example` → `.env`. Never commit `.env`.
+
+## Layout
+
+```
+app/page.tsx                 Env-only status dot
+app/api/health/route.ts      Shallow + deep health
+app/api/sync/route.ts        Notified sync entrypoint
+lib/shared/                  Code used by more than one feature (auth, env helpers)
+lib/features/<feature>/      One folder per feature; owns its env loader, config, tests
+```
+
+## Conventions
+
+- New feature → new folder in `lib/features/` with its own `env.ts` loader. A feature must not require another feature's env vars.
+- Only move code to `lib/shared/` once a second feature needs it.
+- Route handlers stay thin: load env, check auth, call the feature, return JSON.
+- Run `npm test && npm run build` before finishing.
+- No routes under `app/api/test/`. No dev preview/demo routes.
+
+---
+
+## Feature: Notified sync
+
+Syncs Notified (GlobeNewswire) press releases from JsonFeed into a Framer managed collection (**Notified_Feed** by default).
+
+Vendor API and field reference live in the Navisalma **keeping-up** repo: `docs/NOTIFIED-FEED-SYNC.md`, `docs/NOTIFIED-INTEGRATION.md`. Iframe/IR page work is out of scope here.
+
+Manual run:
 
 ```bash
 curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/sync
 ```
 
-## Routes
+Cron auth: `Authorization: Bearer $CRON_SECRET` (`lib/shared/auth-cron.ts`).
 
-| Route | Auth | Behavior |
-|-------|------|----------|
-| `GET /` | none | Green dot if `loadSyncEnv()` succeeds; red on missing env. No Framer/feed calls. |
-| `GET /api/health` | none | `{ ok: true }` if env loads |
-| `GET /api/health?deep=1` | none | Framer connect + JsonFeed probe (`max/1`), validates JSON array |
-| `GET /api/sync` | Bearer `CRON_SECRET` | Full paginated sync → Framer upsert/reconcile/publish |
-
-## Deploy
-
-Push `main` → Vercel project **navisalma-framersync**. Cron: `GET /api/sync` every minute (`vercel.json`, Pro plan). Sync function `maxDuration`: 300s.
-
-| Step | Check |
-|------|-------|
-| Env vars set | see below |
-| Cron running | Vercel → Cron Jobs |
-| Health | `GET /api/health` → `{ ok: true }` |
-| Sync | Bearer `CRON_SECRET` → see response shape below |
-
-Cron auth: `Authorization: Bearer $CRON_SECRET` (`lib/auth-cron.ts`).
-
-Production: `https://navisalma-framersync.vercel.app/api/sync`
-
-## Environment
-
-Copy `.env.example` → `.env`. Never commit `.env`.
+### Environment
 
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
@@ -58,32 +85,26 @@ Copy `.env.example` → `.env`. Never commit `.env`.
 | `NOTIFIED_RSS_URL` | no | — | Fallback; `/RssFeed/` → `/JsonFeed/` in `loadSyncEnv()` |
 | `AUTO_PUBLISH` | no | `true` | Publish + deploy when content changed or items removed |
 
-Feed URL resolution (`lib/env.ts`): `NOTIFIED_FEED_URL` → `NOTIFIED_RSS_URL` (normalized) → `buildFeedUrl(DEFAULT_FEED_SETTINGS)` (`lib/rss/build-feed-url.ts`, org token in `lib/config.ts`).
+Feed URL resolution (`env.ts`): `NOTIFIED_FEED_URL` → `NOTIFIED_RSS_URL` (normalized) → `buildFeedUrl(DEFAULT_FEED_SETTINGS)` (`rss/build-feed-url.ts`, org token in `config.ts`).
 
-Loader: `loadSyncEnv()` in `lib/env.ts`. Defaults: `lib/config.ts`, `lib/rss/feed-settings.ts`.
-
-## Layout
+### Layout (under `lib/features/notified-sync/`)
 
 ```
-app/page.tsx                       Env-only status dot
-app/api/sync/route.ts              Sync entrypoint (Bearer auth)
-app/api/health/route.ts            Shallow + deep health
-lib/auth-cron.ts                   Cron Bearer check
-lib/env.ts                         Env loader
-lib/config.ts                      Collection name, JsonFeed base URL, default org token
-lib/sync/run-sync.ts               Fetch all pages → Framer sync
-lib/rss/fetch-all-feed.ts          JsonFeed pagination (100/page, max 200 pages)
-lib/rss/parse-json-feed.ts         Parse + normalize vendor JSON
-lib/rss/build-feed-url.ts          JsonFeed URL builder
-lib/rss/feed-settings.ts           Feed query defaults + URL param helpers
-lib/rss/types.ts                   JsonFeedItem + SyncResult types
-lib/framer/sync-press-releases.ts  Upsert, reconcile, publish, sync lock
-lib/framer/schema.ts               CMS fields + JsonFeed mapping (source of truth)
-lib/framer/collection.ts           Find managed collection by name
-lib/framer/last-sync.ts            Last sync metadata stored in collection plugin data
+env.ts                       loadSyncEnv()
+config.ts                    Collection name, JsonFeed base URL, default org token, User-Agent
+run-sync.ts                  Fetch all pages → Framer sync
+rss/fetch-all-feed.ts        JsonFeed pagination (100/page, max 200 pages)
+rss/parse-json-feed.ts       Parse + normalize vendor JSON
+rss/build-feed-url.ts        JsonFeed URL builder
+rss/feed-settings.ts         Feed query defaults + URL param helpers
+rss/types.ts                 JsonFeedItem + SyncResult types
+framer/sync-press-releases.ts  Upsert, reconcile, publish, sync lock
+framer/schema.ts             CMS fields + JsonFeed mapping (source of truth)
+framer/collection.ts         Find managed collection by name
+framer/last-sync.ts          Last sync metadata stored in collection plugin data
 ```
 
-## Sync pipeline
+### Sync pipeline
 
 1. Paginate `feedUrl` with `/max/100/start/N` until a page returns fewer than 100 items (cap: 200 pages).
 2. Parse JsonFeed array; dedupe by `Identifier`; fail if any item lacks `Identifier`.
@@ -93,7 +114,7 @@ lib/framer/last-sync.ts            Last sync metadata stored in collection plugi
 6. Reconcile: delete CMS item ids not in the full feed snapshot.
 7. Publish + deploy when `AUTO_PUBLISH` and (`changed` or items removed). Upsert batches of 5.
 
-**CMS fields:** 22 vendor keys → Framer columns, plus **Cover Image** (first `<img src>` in `Content`). Canonical map: `JSON_FEED_FIELD_MAP` + `COVER_IMAGE_FIELD_ID` in `lib/framer/schema.ts`. Omit image fields when URL is null (Framer mishandles null images).
+**CMS fields:** 22 vendor keys → Framer columns, plus **Cover Image** (first `<img src>` in `Content`). Canonical map: `JSON_FEED_FIELD_MAP` + `COVER_IMAGE_FIELD_ID` in `framer/schema.ts`. Omit image fields when URL is null (Framer mishandles null images).
 
 **Sync response** (`GET /api/sync`):
 
@@ -103,9 +124,7 @@ lib/framer/last-sync.ts            Last sync metadata stored in collection plugi
 
 Optional `skipped: true` when another sync holds the lock.
 
-## Conventions
+### Rules
 
-- JsonFeed code in `lib/rss/`, Framer writes in `lib/framer/`.
+- JsonFeed code in `rss/`, Framer writes in `framer/`.
 - Item id = `String(Identifier)`; slug matches id.
-- Run `npm test && npm run build` before finishing.
-- No routes under `app/api/test/`. No dev preview/demo routes in this repo.

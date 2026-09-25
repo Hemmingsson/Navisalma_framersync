@@ -1,9 +1,11 @@
-# Navisalma Framer Sync
+# einride-framer-things
 
-GlobeNewswire JsonFeed → Framer CMS. Deployed on Vercel as **navisalma-framersync**.
+Small backend for the einride Framer website, deployed on Vercel. Each feature lives in `lib/features/`:
+
+- **Notified sync** — GlobeNewswire JsonFeed → Framer CMS, every minute via Vercel cron.
 
 **Operator docs:** [AGENTS.md](./AGENTS.md)  
-**Architecture & Notified reference:** keeping-up repo → `docs/NOTIFIED-FEED-SYNC.md`, `docs/NOTIFIED-INTEGRATION.md`
+**Notified reference:** keeping-up repo → `docs/NOTIFIED-FEED-SYNC.md`, `docs/NOTIFIED-INTEGRATION.md`
 
 ## Quick start
 
