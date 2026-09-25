@@ -26,7 +26,6 @@ npm run build
 | `GET /api/health?deep=1` | none | Framer connect + JsonFeed probe (`max/1`), validates JSON array |
 | `GET /api/sync` | Bearer `CRON_SECRET` | Notified sync (see below) |
 | `POST /api/forms/newsletter` | `Framer-Signature` HMAC | Framer form → HubSpot (see below) |
-| `GET /api/forms/newsletter` | none | Same status page as `/` (`middleware.ts` rewrite), so the webhook URL is browsable |
 
 ## Deploy
 
